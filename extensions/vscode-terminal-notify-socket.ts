@@ -11,26 +11,56 @@ const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const MAX_ANCESTOR_DEPTH = 15;
 const TERMINAL_NOTIFIER_COMMAND = "terminal-notifier";
 const FOCUS_SCRIPT_NAME = "focus-terminal.js";
-const EXTENSION_LOG_PATH = path.join(
-  os.homedir(),
-  ".pi",
-  "vscode-pi",
-  "extension-log.txt",
-);
+const EXTENSION_LOG_PATH = path.join(os.homedir(), ".pi", "vscode-pi", "extension-log.txt");
 
-let terminalNotifierAvailable: boolean | undefined;
+let terminalNotifierAvailablePromise: Promise<boolean> | undefined;
+
+type SocketPayload = {
+  focused: boolean;
+  piTerminalActive: boolean;
+};
+
+function isSocketPayload(value: unknown): value is SocketPayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  return typeof record["focused"] === "boolean" && typeof record["piTerminalActive"] === "boolean";
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+}
 
 function log(message: string, data?: unknown) {
   const timestamp = new Date().toISOString();
   const suffix = data ? ` ${JSON.stringify(data)}` : "";
   const line = `[Pi Notify] ${timestamp} ${message}${suffix}\n`;
 
-  try {
-    fs.mkdirSync(path.dirname(EXTENSION_LOG_PATH), { recursive: true });
-    fs.appendFileSync(EXTENSION_LOG_PATH, line, "utf8");
-  } catch (error) {
-    console.log(line.trimEnd(), { error: String(error) });
-  }
+  void (async () => {
+    try {
+      await fs.promises.mkdir(path.dirname(EXTENSION_LOG_PATH), {
+        recursive: true,
+      });
+      await fs.promises.appendFile(EXTENSION_LOG_PATH, line, "utf8");
+    } catch (error) {
+      const errorSuffix = JSON.stringify({ error: formatError(error) });
+      process.stderr.write(`${line.trimEnd()} ${errorSuffix}\n`);
+    }
+  })();
 }
 
 function getSocketDirectory() {
@@ -45,7 +75,8 @@ function execFileAsync(command: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     execFile(command, args, (error, stdout, stderr) => {
       if (error) {
-        reject(error);
+        const execError = error instanceof Error ? error : new Error(formatError(error));
+        reject(execError);
         return;
       }
       resolve({ stdout, stderr });
@@ -55,38 +86,34 @@ function execFileAsync(command: string, args: string[]) {
 
 async function getParentPid(pid: number) {
   try {
-    const { stdout } = await execFileAsync("ps", [
-      "-o",
-      "ppid=",
-      "-p",
-      String(pid),
-    ]);
-    const parsed = parseInt(stdout.trim(), 10);
+    const { stdout } = await execFileAsync("ps", ["-o", "ppid=", "-p", String(pid)]);
+    const parsed = Number.parseInt(stdout.trim(), 10);
     const parent = Number.isNaN(parsed) ? undefined : parsed;
     log("Fetched parent PID", { pid, parent });
     return parent;
   } catch (error) {
-    log("Failed to fetch parent PID", { pid, error: String(error) });
+    log("Failed to fetch parent PID", { pid, error: formatError(error) });
     return undefined;
   }
 }
 
 async function isTerminalNotifierAvailable() {
-  if (terminalNotifierAvailable !== undefined) {
-    return terminalNotifierAvailable;
+  if (!terminalNotifierAvailablePromise) {
+    terminalNotifierAvailablePromise = (async () => {
+      try {
+        await execFileAsync("which", [TERMINAL_NOTIFIER_COMMAND]);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
   }
 
-  try {
-    await execFileAsync("which", [TERMINAL_NOTIFIER_COMMAND]);
-    terminalNotifierAvailable = true;
-  } catch (error) {
-    terminalNotifierAvailable = false;
-  }
-
+  const available = await terminalNotifierAvailablePromise;
   log("Terminal notifier availability", {
-    available: terminalNotifierAvailable,
+    available,
   });
-  return terminalNotifierAvailable;
+  return available;
 }
 
 async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
@@ -95,10 +122,14 @@ async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
 
   for (let depth = 0; depth < maxDepth; depth += 1) {
     ancestors.push(currentPid);
-    if (currentPid === 1) break;
+    if (currentPid === 1) {
+      break;
+    }
 
     const parentPid = await getParentPid(currentPid);
-    if (!parentPid || parentPid === currentPid) break;
+    if (!parentPid || parentPid === currentPid) {
+      break;
+    }
 
     currentPid = parentPid;
   }
@@ -117,15 +148,13 @@ async function listSocketPaths() {
     log("Listed socket paths", { count: paths.length, paths });
     return paths;
   } catch (error) {
-    log("Failed to list socket paths", { error: String(error) });
+    log("Failed to list socket paths", { error: formatError(error) });
     return [];
   }
 }
 
 async function querySocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<
-    { focused: boolean; piTerminalActive: boolean } | undefined
-  >((resolve) => {
+  return new Promise<{ focused: boolean; piTerminalActive: boolean } | undefined>((resolve) => {
     const socket = net.createConnection({ path: socketPath });
     let buffer = "";
 
@@ -137,29 +166,32 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
     socket.on("data", (chunk) => {
       buffer += chunk.toString();
       const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) return;
+      if (newlineIndex === -1) {
+        return;
+      }
 
       const line = buffer.slice(0, newlineIndex).trim();
+      let payload: unknown;
       try {
-        const payload = JSON.parse(line);
-        if (
-          typeof payload?.focused === "boolean" &&
-          typeof payload?.piTerminalActive === "boolean"
-        ) {
-          log("Received socket response", { socketPath, payload });
-          resolve({
-            focused: payload.focused,
-            piTerminalActive: payload.piTerminalActive,
-          });
-        } else {
-          log("Unexpected socket payload", { socketPath, payload });
-          resolve(undefined);
-        }
+        payload = JSON.parse(line) as unknown;
       } catch (error) {
         log("Failed to parse socket response", {
           socketPath,
-          error: String(error),
+          error: formatError(error),
         });
+        socket.end();
+        resolve(undefined);
+        return;
+      }
+
+      if (isSocketPayload(payload)) {
+        log("Received socket response", { socketPath, payload });
+        resolve({
+          focused: payload.focused,
+          piTerminalActive: payload.piTerminalActive,
+        });
+      } else {
+        log("Unexpected socket payload", { socketPath, payload });
         resolve(undefined);
       }
 
@@ -167,7 +199,7 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
     });
 
     socket.on("error", (error) => {
-      log("Socket connection error", { socketPath, error: String(error) });
+      log("Socket connection error", { socketPath, error: formatError(error) });
       resolve(undefined);
     });
 
@@ -183,7 +215,7 @@ async function isPiTerminalFocused(ancestorPids: number[]) {
   const socketPaths = await listSocketPaths();
   for (const socketPath of socketPaths) {
     const response = await querySocket(socketPath, ancestorPids);
-    if (response?.focused && response?.piTerminalActive) {
+    if (response && response.focused && response.piTerminalActive) {
       log("Pi terminal is focused", { socketPath });
       return true;
     }
@@ -238,7 +270,7 @@ fs.readdir(dir, (err, entries) => {
       socket.end();
     });
     socket.on("error", (error) => {
-      log("Socket error", { socketPath, error: String(error) });
+      log("Socket error", { socketPath, error: formatError(error) });
     });
   });
 });`;
@@ -281,7 +313,7 @@ async function sendNotification(ancestorPids: number[]) {
   }
 }
 
-export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
+function registerVscodeSocketNotify(pi: ExtensionAPI) {
   pi.on("agent_end", async () => {
     const ancestorPids = await getAncestorPids();
     const piTerminalFocused = await isPiTerminalFocused(ancestorPids);
@@ -291,3 +323,5 @@ export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
     }
   });
 }
+
+export { registerVscodeSocketNotify };

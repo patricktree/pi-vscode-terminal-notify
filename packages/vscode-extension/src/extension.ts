@@ -56,13 +56,15 @@ function parseSocketPayload(line: string): SocketPayloadResult {
   try {
     const payload = JSON.parse(line) as unknown;
     if (isRecord(payload)) {
-      if (Array.isArray(payload.ancestorPids)) {
-        ancestorPids = payload.ancestorPids.filter(
+      const ancestorCandidate = payload["ancestorPids"];
+      if (Array.isArray(ancestorCandidate)) {
+        ancestorPids = ancestorCandidate.filter(
           (pid): pid is number => typeof pid === "number" && Number.isFinite(pid),
         );
       }
-      if (typeof payload.command === "string") {
-        command = payload.command;
+      const commandCandidate = payload["command"];
+      if (typeof commandCandidate === "string") {
+        command = commandCandidate;
       }
     }
     log("Received socket payload", { command, ancestorPids });
