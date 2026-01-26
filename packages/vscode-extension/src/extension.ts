@@ -12,6 +12,11 @@ let focused = vscode.window.state.focused;
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
+type SocketPayloadResult = {
+  ancestorPids: number[];
+  command: string;
+};
+
 function log(message: string, data?: unknown) {
   const timestamp = new Date().toISOString();
   const suffix = data ? ` ${JSON.stringify(data)}` : "";
@@ -22,15 +27,63 @@ function log(message: string, data?: unknown) {
   console.log(line);
 }
 
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
+
+function parseSocketPayload(line: string): SocketPayloadResult {
+  let ancestorPids: number[] = [];
+  let command = "query";
+
+  try {
+    const payload = JSON.parse(line) as unknown;
+    if (isRecord(payload)) {
+      if (Array.isArray(payload.ancestorPids)) {
+        ancestorPids = payload.ancestorPids.filter(
+          (pid): pid is number => typeof pid === "number" && Number.isFinite(pid),
+        );
+      }
+      if (typeof payload.command === "string") {
+        command = payload.command;
+      }
+    }
+    log("Received socket payload", { command, ancestorPids });
+  } catch (error) {
+    log("Failed to parse socket payload", { error: formatError(error) });
+  }
+
+  return { ancestorPids, command };
+}
+
 function parseAncestorPidsFromUri(uri: vscode.Uri) {
   const params = new URLSearchParams(uri.query);
   const raw = params.get("ancestors");
   log("Parsing ancestor PIDs from URI", { raw });
-  if (!raw) return [];
+  if (!raw) {
+    return [];
+  }
 
   const parsed = raw
     .split(",")
-    .map((entry) => Number(entry))
+    .map(Number)
     .filter((value) => Number.isFinite(value));
   log("Parsed ancestor PIDs", { parsed });
   return parsed;
@@ -43,17 +96,14 @@ function isSilentUri(uri: vscode.Uri) {
   return silent;
 }
 
-async function terminalMatchesAncestors(
-  terminal: vscode.Terminal,
-  ancestorPids: number[],
-) {
+async function terminalMatchesAncestors(terminal: vscode.Terminal, ancestorPids: number[]) {
   try {
     const pid = await terminal.processId;
     const matches = typeof pid === "number" && ancestorPids.includes(pid);
     log("Checked terminal processId", { pid, matches });
     return matches;
   } catch (error) {
-    log("Failed to read terminal processId", { error: String(error) });
+    log("Failed to read terminal processId", { error: formatError(error) });
     return false;
   }
 }
@@ -70,16 +120,15 @@ async function findTerminalForAncestors(ancestorPids: number[]) {
     terminalCount: vscode.window.terminals.length,
     hasActiveTerminal: Boolean(activeTerminal),
   });
-  if (
-    activeTerminal &&
-    (await terminalMatchesAncestors(activeTerminal, ancestorPids))
-  ) {
+  if (activeTerminal && (await terminalMatchesAncestors(activeTerminal, ancestorPids))) {
     log("Active terminal matched ancestors");
     return activeTerminal;
   }
 
   for (const terminal of vscode.window.terminals) {
-    if (terminal === activeTerminal) continue;
+    if (terminal === activeTerminal) {
+      continue;
+    }
     if (await terminalMatchesAncestors(terminal, ancestorPids)) {
       log("Found matching terminal in list");
       return terminal;
@@ -96,14 +145,12 @@ async function listSocketPaths() {
   try {
     const entries = await fs.promises.readdir(socketDirectory);
     const paths = entries
-      .filter(
-        (entry) => entry.startsWith(SOCKET_PREFIX) && entry.endsWith(".sock"),
-      )
+      .filter((entry) => entry.startsWith(SOCKET_PREFIX) && entry.endsWith(".sock"))
       .map((entry) => path.join(socketDirectory, entry));
     log("Listed socket paths", { count: paths.length, paths });
     return paths;
   } catch (error) {
-    log("Failed to list socket paths", { error: String(error) });
+    log("Failed to list socket paths", { error: formatError(error) });
     return [];
   }
 }
@@ -122,15 +169,13 @@ async function broadcastFocusToSockets(ancestorPids: number[]) {
           const socket = net.createConnection({ path: socketPath });
           socket.on("connect", () => {
             log("Sending focus command", { socketPath });
-            socket.write(
-              `${JSON.stringify({ command: "focus", ancestorPids })}\n`,
-            );
+            socket.write(`${JSON.stringify({ command: "focus", ancestorPids })}\n`);
             socket.end();
           });
           socket.on("error", (error) => {
             log("Socket focus broadcast error", {
               socketPath,
-              error: String(error),
+              error: formatError(error),
             });
             resolve();
           });
@@ -162,7 +207,7 @@ async function updateActiveTerminalProcessId() {
     activeTerminalProcessId = pid ?? undefined;
     log("Updated active terminal processId", { pid: activeTerminalProcessId });
   } catch (error) {
-    log("Failed to read active terminal processId", { error: String(error) });
+    log("Failed to read active terminal processId", { error: formatError(error) });
     activeTerminalProcessId = undefined;
   }
 }
@@ -177,38 +222,43 @@ function getSocketPath() {
   return socketPath;
 }
 
-function ensureSocketDirectory(socketPath: string) {
+async function ensureSocketDirectory(socketPath: string) {
   const dir = path.dirname(socketPath);
   log("Ensuring socket directory exists", { dir });
-  fs.mkdirSync(dir, { recursive: true });
+  await fs.promises.mkdir(dir, { recursive: true });
 }
 
-function removeStaleSocket(socketPath: string) {
-  if (!fs.existsSync(socketPath)) {
-    log("No stale socket to remove", { socketPath });
+async function removeStaleSocket(socketPath: string) {
+  try {
+    await fs.promises.stat(socketPath);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") {
+      log("No stale socket to remove", { socketPath });
+      return;
+    }
+    log("Failed to check stale socket", { error: formatError(error) });
     return;
   }
 
   try {
-    fs.unlinkSync(socketPath);
+    await fs.promises.unlink(socketPath);
     log("Removed stale socket", { socketPath });
   } catch (error) {
-    console.warn("Failed to remove stale socket", error);
-    log("Failed to remove stale socket", { error: String(error) });
+    log("Failed to remove stale socket", { error: formatError(error) });
   }
 }
 
-function startServer() {
+async function startServer() {
   log("Starting Pi socket server");
   const socketPath = getSocketPath();
-  ensureSocketDirectory(socketPath);
-  removeStaleSocket(socketPath);
+  await ensureSocketDirectory(socketPath);
+  await removeStaleSocket(socketPath);
 
   server = net.createServer((socket) => {
     let buffer = "";
     log("Socket client connected");
 
-    socket.on("data", async (chunk) => {
+    const handleSocketData = async (chunk: Buffer) => {
       log("Socket data received", { bytes: chunk.length });
       buffer += chunk.toString();
       const newlineIndex = buffer.indexOf("\n");
@@ -222,44 +272,25 @@ function startServer() {
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
 
-      let ancestorPids: number[] = [];
-      let command = "query";
-      try {
-        const payload = JSON.parse(line);
-        if (Array.isArray(payload?.ancestorPids)) {
-          ancestorPids = payload.ancestorPids.filter(
-            (pid: unknown) => typeof pid === "number",
-          );
-        }
-        if (typeof payload?.command === "string") {
-          command = payload.command;
-        }
-        log("Received socket payload", { command, ancestorPids });
-      } catch (error) {
-        log("Failed to parse socket payload", { error: String(error) });
-      }
+      const { ancestorPids, command } = parseSocketPayload(line);
 
       if (command === "focus") {
         log("Handling focus command", { ancestorPids });
         const terminal = await findTerminalForAncestors(ancestorPids);
         if (terminal) {
           try {
-            await vscode.commands.executeCommand(
-              "workbench.action.focusWindow",
-            );
+            await vscode.commands.executeCommand("workbench.action.focusWindow");
             log("Focused VS Code window");
           } catch (error) {
-            log("Failed to focus VS Code window", { error: String(error) });
+            log("Failed to focus VS Code window", { error: formatError(error) });
           }
 
           try {
             terminal.show(true);
-            await vscode.commands.executeCommand(
-              "workbench.action.terminal.focus",
-            );
+            await vscode.commands.executeCommand("workbench.action.terminal.focus");
             log("Focused terminal panel");
           } catch (error) {
-            log("Failed to focus terminal panel", { error: String(error) });
+            log("Failed to focus terminal panel", { error: formatError(error) });
           }
         } else {
           log("No terminal matched focus request", { ancestorPids });
@@ -278,10 +309,14 @@ function startServer() {
       log("Responding to socket query", response);
       socket.write(`${JSON.stringify(response)}\n`);
       socket.end();
+    };
+
+    socket.on("data", (chunk) => {
+      void handleSocketData(chunk);
     });
 
     socket.on("error", (error) => {
-      log("Socket error", { error: String(error) });
+      log("Socket error", { error: formatError(error) });
     });
 
     socket.on("close", () => {
@@ -290,7 +325,7 @@ function startServer() {
   });
 
   server.on("error", (error) => {
-    log("VS Code socket server error", { error: String(error) });
+    log("VS Code socket server error", { error: formatError(error) });
   });
 
   server.on("close", () => {
@@ -300,6 +335,24 @@ function startServer() {
   server.listen(socketPath, () => {
     log("Pi socket server listening", { socketPath });
   });
+}
+
+async function handleUriActivation(uri: vscode.Uri) {
+  const silent = isSilentUri(uri);
+  const ancestorPids = parseAncestorPidsFromUri(uri);
+  log("Received URI activation", {
+    uri: uri.toString(),
+    ancestorPids,
+    silent,
+  });
+  if (ancestorPids.length === 0) {
+    if (!silent) {
+      void vscode.window.showWarningMessage("Pi notification did not include ancestor PIDs.");
+    }
+    return;
+  }
+
+  await broadcastFocusToSockets(ancestorPids);
 }
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -314,58 +367,30 @@ export async function activate(context: vscode.ExtensionContext) {
       focused = state.focused;
       log("Window focus state changed", { focused });
     }),
-  );
-
-  context.subscriptions.push(
     vscode.window.onDidChangeActiveTerminal(() => {
       log("Active terminal changed");
       void updateActiveTerminalProcessId();
     }),
-  );
-
-  context.subscriptions.push(
     vscode.window.onDidOpenTerminal(() => {
       log("Terminal opened");
       void updateActiveTerminalProcessId();
     }),
-  );
-
-  context.subscriptions.push(
     vscode.window.onDidCloseTerminal(() => {
       log("Terminal closed");
       void updateActiveTerminalProcessId();
     }),
-  );
-
-  context.subscriptions.push(
     vscode.window.registerUriHandler({
-      handleUri: async (uri) => {
-        const silent = isSilentUri(uri);
-        const ancestorPids = parseAncestorPidsFromUri(uri);
-        log("Received URI activation", {
-          uri: uri.toString(),
-          ancestorPids,
-          silent,
-        });
-        if (ancestorPids.length === 0) {
-          if (!silent) {
-            void vscode.window.showWarningMessage(
-              "Pi notification did not include ancestor PIDs.",
-            );
-          }
-          return;
-        }
-
-        await broadcastFocusToSockets(ancestorPids);
+      handleUri: (uri) => {
+        void handleUriActivation(uri);
       },
     }),
   );
 
-  startServer();
+  await startServer();
   log("Extension activated");
 }
 
-export function deactivate() {
+export async function deactivate() {
   log("Extension deactivating");
   if (server) {
     server.close();
@@ -374,12 +399,12 @@ export function deactivate() {
   }
 
   const socketPath = getSocketPath();
-  if (fs.existsSync(socketPath)) {
-    try {
-      fs.unlinkSync(socketPath);
-      log("Removed socket file", { socketPath });
-    } catch (error) {
-      log("Failed to clean up socket", { error: String(error) });
+  try {
+    await fs.promises.unlink(socketPath);
+    log("Removed socket file", { socketPath });
+  } catch (error) {
+    if (!(isNodeError(error) && error.code === "ENOENT")) {
+      log("Failed to clean up socket", { error: formatError(error) });
     }
   }
 

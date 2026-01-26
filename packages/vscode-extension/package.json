@@ -1,28 +1,49 @@
 {
   "name": "pi-terminal-notify-socket",
-  "displayName": "Pi Terminal Notify Socket",
-  "description": "Expose VS Code terminal focus state over a local Unix socket for Pi notifications.",
-  "version": "0.1.0",
-  "publisher": "pi",
-  "engines": {
-    "vscode": "^1.85.0"
-  },
+  "private": true,
   "categories": [
     "Other"
   ],
+  "type": "module",
+  "main": "./dist/extension.js",
+  "files": [
+    "dist/**",
+    "!dist/**/*.d.ts.map"
+  ],
+  "scripts": {
+    "build": "tsc --build ./tsconfig.json",
+    "dev": "tsc --watch --build ./tsconfig.json",
+    "format": "prettier --write --ignore-unknown .",
+    "lint": "eslint --max-warnings 0 .",
+    "lint:file": "eslint --max-warnings 0",
+    "lint:file:fix": "eslint --max-warnings 0 --fix",
+    "lint:fix": "eslint --max-warnings 0 . --fix"
+  },
+  "contributes": {},
   "activationEvents": [
     "onStartupFinished",
     "onUri"
   ],
-  "main": "./out/extension.js",
-  "contributes": {},
-  "scripts": {
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
-  },
   "devDependencies": {
     "@types/node": "^22.10.5",
     "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.51.0",
+    "@typescript-eslint/parser": "^8.51.0",
+    "eslint": "^8.57.1",
+    "eslint-plugin-eslint-comments": "^3.2.0",
+    "eslint-plugin-import": "^2.30.0",
+    "eslint-plugin-jsdoc": "^50.2.2",
+    "eslint-plugin-n": "^17.23.1",
+    "eslint-plugin-only-warn": "^1.1.0",
+    "eslint-plugin-regexp": "^2.6.0",
+    "eslint-plugin-unicorn": "^55.0.0",
+    "prettier": "^3.3.3",
+    "prettier-plugin-packagejson": "^2.5.2",
     "typescript": "^5.5.4"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "pnpm": "10.28.2",
+    "vscode": "^1.85.0"
   }
 }

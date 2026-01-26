@@ -7,7 +7,7 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "outDir": "out"
+    "outDir": "dist"
   },
   "include": ["*.ts", "*.d.ts"]
 }

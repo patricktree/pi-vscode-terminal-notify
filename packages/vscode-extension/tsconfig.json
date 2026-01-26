@@ -1,15 +1,43 @@
 {
+  /* based on https://patricktree.me/tidbits/sensible-tsconfig-defaults */
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "lib": ["ES2020"],
+    /* Language and Environment */
+    "target": "ES2018",
+
+    /* Modules */
+    "module": "node16",
+    "lib": ["ES2018"],
     "types": ["node"],
+
+    /* Emit */
     "rootDir": "src",
-    "outDir": "out",
-    "strict": true,
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    /* Interop Constraints */
+    "erasableSyntaxOnly": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "sourceMap": true
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+
+    /* Type Checking */
+    "allowUnreachableCode": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+
+    /* Projects */
+    "composite": true,
+    "incremental": true,
+
+    /* Completeness */
+    "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["**/node_modules"]
 }
