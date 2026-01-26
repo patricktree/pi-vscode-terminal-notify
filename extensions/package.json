@@ -1,0 +1,16 @@
+{
+  "name": "pi-terminal-notify-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.49.3"
+  }
+}
