@@ -1,9 +1,12 @@
 {
   "name": "pi-terminal-notify-socket",
-  "private": true,
+  "displayName": "Pi Terminal Notify Socket",
+  "version": "0.1.0",
+  "description": "Expose VS Code terminal focus state over a local Unix socket for Pi notifications.",
   "categories": [
     "Other"
   ],
+  "publisher": "pi",
   "type": "module",
   "main": "./dist/extension.js",
   "files": [
