@@ -17,10 +17,10 @@ npm run compile
 
 Load the extension in VS Code (Run → Start Debugging for extension dev) or package it using `vsce`.
 
-The extension listens on:
+The extension listens on per-window sockets under:
 
 ```
-~/.pi/vscode-pi.sock
+~/.pi/vscode-pi/vscode-pi-<pid>.sock
 ```
 
 ## Pi Extension
@@ -48,4 +48,4 @@ When Pi finishes a prompt (`agent_end`), it:
 - Queries the VS Code socket for focus + active terminal.
 - Sends a macOS notification if VS Code is unfocused or another terminal is active.
 
-If the socket is unavailable, it falls back to sending a notification.
+If `terminal-notifier` is installed (`brew install terminal-notifier`), clicking the notification focuses the VS Code window that owns the Pi terminal (even with multiple windows). If it is missing, Pi falls back to `osascript` (no click handler).
