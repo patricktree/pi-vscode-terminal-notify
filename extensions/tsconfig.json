@@ -23,6 +23,8 @@
     "verbatimModuleSyntax": true,
 
     /* Type Checking */
+    "allowJs": true,
+    "checkJs": true,
     "allowUnreachableCode": false,
     "noFallthroughCasesInSwitch": true,
     "noImplicitOverride": true,
@@ -37,6 +39,6 @@
     /* Completeness */
     "skipLibCheck": true
   },
-  "include": ["**/*.ts", "**/*.d.ts"],
+  "include": ["**/*.ts", "**/*.d.ts", "**/*.mjs"],
   "exclude": ["**/node_modules", "dist/**/*"]
 }

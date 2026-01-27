@@ -10,7 +10,7 @@ const NOTIFICATION_TITLE = "Pi";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const MAX_ANCESTOR_DEPTH = 15;
 const TERMINAL_NOTIFIER_COMMAND = "terminal-notifier";
-const FOCUS_SCRIPT_NAME = "focus-terminal.js";
+const FOCUS_SCRIPT_NAME = "focus-terminal.mjs";
 const EXTENSION_LOG_PATH = path.join(os.homedir(), ".pi", "vscode-pi", "extension-log.txt");
 
 let terminalNotifierAvailablePromise: Promise<boolean> | undefined;
@@ -20,100 +20,15 @@ type SocketPayload = {
   piTerminalActive: boolean;
 };
 
-function isSocketPayload(value: unknown): value is SocketPayload {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
+export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
+  pi.on("agent_end", async () => {
+    const ancestorPids = await getAncestorPids();
+    const piTerminalFocused = await isPiTerminalFocused(ancestorPids);
 
-  const record = value as Record<string, unknown>;
-  return typeof record["focused"] === "boolean" && typeof record["piTerminalActive"] === "boolean";
-}
-
-function formatError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return "Unknown error";
-  }
-}
-
-function log(message: string, data?: unknown) {
-  const timestamp = new Date().toISOString();
-  const suffix = data ? ` ${JSON.stringify(data)}` : "";
-  const line = `[Pi Notify] ${timestamp} ${message}${suffix}\n`;
-
-  void (async () => {
-    try {
-      await fs.promises.mkdir(path.dirname(EXTENSION_LOG_PATH), {
-        recursive: true,
-      });
-      await fs.promises.appendFile(EXTENSION_LOG_PATH, line, "utf8");
-    } catch (error) {
-      const errorSuffix = JSON.stringify({ error: formatError(error) });
-      process.stderr.write(`${line.trimEnd()} ${errorSuffix}\n`);
+    if (!piTerminalFocused) {
+      await sendNotification(ancestorPids);
     }
-  })();
-}
-
-function getSocketDirectory() {
-  return path.join(os.homedir(), SOCKET_DIRECTORY);
-}
-
-function getFocusScriptPath() {
-  return path.join(getSocketDirectory(), FOCUS_SCRIPT_NAME);
-}
-
-function execFileAsync(command: string, args: string[]) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(command, args, (error, stdout, stderr) => {
-      if (error) {
-        const execError = error instanceof Error ? error : new Error(formatError(error));
-        reject(execError);
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
   });
-}
-
-async function getParentPid(pid: number) {
-  try {
-    const { stdout } = await execFileAsync("ps", ["-o", "ppid=", "-p", String(pid)]);
-    const parsed = Number.parseInt(stdout.trim(), 10);
-    const parent = Number.isNaN(parsed) ? undefined : parsed;
-    log("Fetched parent PID", { pid, parent });
-    return parent;
-  } catch (error) {
-    log("Failed to fetch parent PID", { pid, error: formatError(error) });
-    return undefined;
-  }
-}
-
-async function isTerminalNotifierAvailable() {
-  if (!terminalNotifierAvailablePromise) {
-    terminalNotifierAvailablePromise = (async () => {
-      try {
-        await execFileAsync("which", [TERMINAL_NOTIFIER_COMMAND]);
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-  }
-
-  const available = await terminalNotifierAvailablePromise;
-  log("Terminal notifier availability", {
-    available,
-  });
-  return available;
 }
 
 async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
@@ -136,6 +51,75 @@ async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
 
   log("Collected ancestor PIDs", { ancestors });
   return ancestors;
+}
+
+async function isPiTerminalFocused(ancestorPids: number[]) {
+  const socketPaths = await listSocketPaths();
+  const responses = await Promise.all(
+    socketPaths.map((socketPath) => querySocket(socketPath, ancestorPids)),
+  );
+  const piTerminalFocused = responses.some(
+    (response) => response && response.focused && response.piTerminalActive,
+  );
+
+  if (piTerminalFocused) {
+    log("Pi terminal is focused");
+    return true;
+  }
+
+  log("Pi terminal is not focused");
+  return false;
+}
+
+async function sendNotification(ancestorPids: number[]) {
+  if (!(await isTerminalNotifierAvailable())) {
+    throw new Error("terminal-notifier is not available");
+  }
+
+  const socketPaths = await listSocketPaths();
+
+  log("Preparing to send notification", { socketCount: socketPaths.length });
+
+  if (socketPaths.length === 0) {
+    log("No Pi terminal sockets found, skipping notification");
+    return;
+  }
+
+  log("Sending notification with focus command");
+  const focusCommand = await buildFocusCommand(ancestorPids);
+  log("Focus command built", { focusCommand });
+  await execFileAsync(TERMINAL_NOTIFIER_COMMAND, [
+    "-title",
+    NOTIFICATION_TITLE,
+    "-message",
+    NOTIFICATION_MESSAGE,
+    "-execute",
+    focusCommand,
+    "-group",
+    `pi-${process.pid}`,
+  ]);
+  log("Notification sent");
+}
+
+async function buildFocusCommand(ancestorPids: number[]) {
+  const nodePath = process.execPath;
+  const scriptPath = await ensureFocusScript();
+  const socketDirectory = getSocketDirectory();
+  const ancestors = ancestorPids.join(",");
+
+  return `${quoteCommandPart(nodePath)} ${quoteCommandPart(scriptPath)} ${quoteCommandPart(
+    socketDirectory,
+  )} ${quoteCommandPart(ancestors)}`;
+}
+
+async function ensureFocusScript() {
+  const socketDirectory = getSocketDirectory();
+  await fs.promises.mkdir(socketDirectory, { recursive: true });
+  const scriptPath = getFocusScriptPath();
+  const scriptSourceUrl = new URL("focus-terminal.mjs", import.meta.url);
+  const script = await fs.promises.readFile(scriptSourceUrl, "utf8");
+  await fs.promises.writeFile(scriptPath, script, "utf8");
+  return scriptPath;
 }
 
 async function listSocketPaths() {
@@ -211,117 +195,102 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
   });
 }
 
-async function isPiTerminalFocused(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths();
-  for (const socketPath of socketPaths) {
-    const response = await querySocket(socketPath, ancestorPids);
-    if (response && response.focused && response.piTerminalActive) {
-      log("Pi terminal is focused", { socketPath });
-      return true;
-    }
+async function isTerminalNotifierAvailable() {
+  if (!terminalNotifierAvailablePromise) {
+    terminalNotifierAvailablePromise = (async () => {
+      try {
+        await execFileAsync("which", [TERMINAL_NOTIFIER_COMMAND]);
+        return true;
+      } catch {
+        return false;
+      }
+    })();
   }
 
-  log("Pi terminal is not focused");
-  return false;
+  const available = await terminalNotifierAvailablePromise;
+  log("Terminal notifier availability", {
+    available,
+  });
+  return available;
 }
 
-async function ensureFocusScript() {
-  const socketDirectory = getSocketDirectory();
-  await fs.promises.mkdir(socketDirectory, { recursive: true });
-  const scriptPath = getFocusScriptPath();
-
-  const script = `const fs = require("fs");
-const net = require("net");
-const os = require("os");
-const path = require("path");
-const logPath = path.join(os.homedir(), ".pi", "vscode-pi", "focus-script-log.txt");
-const dir = process.argv[2];
-const ancestors = (process.argv[3] || "")
-  .split(",")
-  .map((value) => Number(value))
-  .filter((value) => Number.isFinite(value));
-const log = (message, data) => {
-  const timestamp = new Date().toISOString();
-  const suffix = data ? " " + JSON.stringify(data) : "";
-  const line = "[Pi Focus Script] " + timestamp + " " + message + suffix + "\n";
+async function getParentPid(pid: number) {
   try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    fs.appendFileSync(logPath, line, "utf8");
-  } catch (_) {
-    // ignore logging failures
+    const { stdout } = await execFileAsync("ps", ["-o", "ppid=", "-p", String(pid)]);
+    const parsed = Number.parseInt(stdout.trim(), 10);
+    const parent = Number.isNaN(parsed) ? undefined : parsed;
+    log("Fetched parent PID", { pid, parent });
+    return parent;
+  } catch (error) {
+    log("Failed to fetch parent PID", { pid, error: formatError(error) });
+    return undefined;
   }
-};
-if (!dir || ancestors.length === 0) {
-  log("Missing directory or ancestors", { dir, ancestors });
-  process.exit(0);
 }
-log("Starting focus script", { dir, ancestors });
-fs.readdir(dir, (err, entries) => {
-  if (err) {
-    log("Failed to read directory", { dir, error: String(err) });
-    return;
-  }
-  entries.filter((entry) => entry.endsWith(".sock")).forEach((entry) => {
-    const socketPath = path.join(dir, entry);
-    const socket = net.createConnection({ path: socketPath });
-    socket.on("connect", () => {
-      log("Connected to socket", { socketPath });
-      socket.write(JSON.stringify({ command: "focus", ancestorPids: ancestors }) + "\\n");
-      socket.end();
-    });
-    socket.on("error", (error) => {
-      log("Socket error", { socketPath, error: formatError(error) });
+
+function getSocketDirectory() {
+  return path.join(os.homedir(), SOCKET_DIRECTORY);
+}
+
+function getFocusScriptPath() {
+  return path.join(getSocketDirectory(), FOCUS_SCRIPT_NAME);
+}
+
+function quoteCommandPart(value: string) {
+  return JSON.stringify(value);
+}
+
+function execFileAsync(command: string, args: string[]) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    execFile(command, args, (error, stdout, stderr) => {
+      if (error) {
+        const execError = error instanceof Error ? error : new Error(formatError(error));
+        reject(execError);
+        return;
+      }
+      resolve({ stdout, stderr });
     });
   });
-});`;
-
-  await fs.promises.writeFile(scriptPath, script, "utf8");
-  return scriptPath;
 }
 
-async function buildFocusCommand(ancestorPids: number[]) {
-  const nodePath = process.execPath;
-  const scriptPath = await ensureFocusScript();
-  const socketDirectory = getSocketDirectory();
-  const ancestors = ancestorPids.join(",");
-
-  const quote = (value: string) => JSON.stringify(value);
-  return `${quote(nodePath)} ${quote(scriptPath)} ${quote(socketDirectory)} ${quote(ancestors)}`;
-}
-
-async function sendNotification(ancestorPids: number[]) {
-  if (!(await isTerminalNotifierAvailable())) {
-    throw new Error("terminal-notifier is not available");
+function isSocketPayload(value: unknown): value is SocketPayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
   }
 
-  const socketPaths = await listSocketPaths();
-
-  if (socketPaths.length > 0) {
-    const focusCommand = await buildFocusCommand(ancestorPids);
-    return execFileAsync(TERMINAL_NOTIFIER_COMMAND, [
-      "-title",
-      NOTIFICATION_TITLE,
-      "-message",
-      NOTIFICATION_MESSAGE,
-      "-execute",
-      focusCommand,
-      "-activate",
-      "com.microsoft.VSCode",
-      "-group",
-      `pi-${process.pid}`,
-    ]);
-  }
+  const record = value as Record<string, unknown>;
+  return typeof record["focused"] === "boolean" && typeof record["piTerminalActive"] === "boolean";
 }
 
-function registerVscodeSocketNotify(pi: ExtensionAPI) {
-  pi.on("agent_end", async () => {
-    const ancestorPids = await getAncestorPids();
-    const piTerminalFocused = await isPiTerminalFocused(ancestorPids);
+function log(message: string, data?: unknown) {
+  const timestamp = new Date().toISOString();
+  const suffix = data ? ` ${JSON.stringify(data)}` : "";
+  const line = `[Pi Notify] ${timestamp} ${message}${suffix}\n`;
 
-    if (!piTerminalFocused) {
-      await sendNotification(ancestorPids);
+  void (async () => {
+    try {
+      await fs.promises.mkdir(path.dirname(EXTENSION_LOG_PATH), {
+        recursive: true,
+      });
+      await fs.promises.appendFile(EXTENSION_LOG_PATH, line, "utf8");
+    } catch (error) {
+      const errorSuffix = JSON.stringify({ error: formatError(error) });
+      process.stderr.write(`${line.trimEnd()} ${errorSuffix}\n`);
     }
-  });
+  })();
 }
 
-export { registerVscodeSocketNotify };
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown error";
+  }
+}

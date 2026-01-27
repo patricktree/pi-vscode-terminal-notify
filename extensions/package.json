@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "files": [
-    "vscode-terminal-notify-socket.ts"
+    "vscode-terminal-notify-socket.ts",
+    "focus-terminal.mjs"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",

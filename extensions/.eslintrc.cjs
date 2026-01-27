@@ -70,7 +70,6 @@ module.exports = {
     "import/newline-after-import": "error",
     "import/no-absolute-path": "error",
     "import/no-cycle": "error",
-    "import/no-default-export": "error",
     "import/no-duplicates": "error",
     "import/no-dynamic-require": "error",
     "import/no-mutable-exports": "error",
