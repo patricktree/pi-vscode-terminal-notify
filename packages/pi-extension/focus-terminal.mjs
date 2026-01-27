@@ -4,7 +4,12 @@ import { createConnection } from "node:net";
 import os from "node:os";
 import path from "node:path";
 
-const logPath = path.join(os.homedir(), ".pi", "vscode-pi", "focus-script-log.txt");
+const logPath = path.join(
+  os.homedir(),
+  ".pi",
+  "vscode-terminal-notification",
+  "focus-script-log.txt",
+);
 const dir = process.argv[2];
 const ancestors = (process.argv[3] || "")
   .split(",")

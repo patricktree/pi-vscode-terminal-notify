@@ -5,13 +5,18 @@ import path from "node:path";
 import fs from "node:fs";
 import { execFile } from "node:child_process";
 
-const SOCKET_DIRECTORY = path.join(".pi", "vscode-pi");
+const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
 const NOTIFICATION_TITLE = "Pi";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const MAX_ANCESTOR_DEPTH = 15;
 const TERMINAL_NOTIFIER_COMMAND = "terminal-notifier";
 const FOCUS_SCRIPT_NAME = "focus-terminal.mjs";
-const EXTENSION_LOG_PATH = path.join(os.homedir(), ".pi", "vscode-pi", "pi-extension-log.txt");
+const EXTENSION_LOG_PATH = path.join(
+  os.homedir(),
+  ".pi",
+  "vscode-terminal-notification",
+  "pi-extension-log.txt",
+);
 
 let terminalNotifierAvailablePromise: Promise<boolean> | undefined;
 

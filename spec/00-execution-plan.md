@@ -12,7 +12,7 @@ Send macOS notifications when Pi finishes a turn **unless** the Pi terminal is t
   - Which terminal is **active/focused** (VS Code only exposes the active terminal)
   - The active terminal's `processId`
 - Pi extension should query VS Code via a Unix domain socket.
-- Socket path is local to user (e.g. `~/.pi/vscode-pi.sock`).
+- Socket path is local to user (e.g. `~/.pi/vscode-terminal-notification.sock`).
 - One‑shot request/response per `agent_end`:
   - Request: `{ "ancestorPids": [123, 456, ...] }\n`
   - Response:
@@ -25,7 +25,7 @@ Send macOS notifications when Pi finishes a turn **unless** the Pi terminal is t
 
 - Scaffold extension in `packages/vscode-extension` (TypeScript).
 - On activation:
-  - Create Unix socket server at `~/.pi/vscode-pi.sock` (remove stale socket if exists).
+  - Create Unix socket server at `~/.pi/vscode-terminal-notification.sock` (remove stale socket if exists).
   - Track state with VS Code APIs:
     - `window.onDidChangeWindowState`
     - `window.onDidChangeActiveTerminal`
@@ -48,10 +48,10 @@ Send macOS notifications when Pi finishes a turn **unless** the Pi terminal is t
 
 ### 4) Create Pi extension (client)
 
-- Extension path: `~/.pi/agent/extensions/vscode-terminal-notify-socket.ts`.
+- Extension path: `~/.pi/agent/extensions/vscode-terminal-notify.ts`.
 - On `agent_end`:
   - Build ancestor PID list from `process.pid` → `ppid` → ... → 1 (cap depth: 15).
-  - Connect to socket `~/.pi/vscode-pi.sock` using Node `net`.
+  - Connect to socket `~/.pi/vscode-terminal-notification.sock` using Node `net`.
   - Send request JSON line with `ancestorPids`.
   - Read response JSON line.
   - If `focused && piTerminalActive`: skip.
@@ -76,5 +76,5 @@ Send macOS notifications when Pi finishes a turn **unless** the Pi terminal is t
 - Best way to associate Pi with a terminal:
   - Use ancestor PID matching between Pi's process tree and VS Code's `activeTerminal.processId`.
   - Cap PID walk depth to avoid long loops (set to 15 levels).
-- Socket location and permissions (default to `~/.pi/vscode-pi.sock`).
+- Socket location and permissions (default to `~/.pi/vscode-terminal-notification.sock`).
 - Notification message customization (title/body).

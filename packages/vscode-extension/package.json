@@ -7,7 +7,7 @@
   ],
   "publisher": "pi",
   "type": "module",
-  "main": "./dist/extension.js",
+  "main": "./dist/vscode-extension.js",
   "files": [
     "dist/**",
     "!dist/**/*.d.ts.map"

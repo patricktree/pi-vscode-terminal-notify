@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "files": [
-    "vscode-terminal-notify-socket.ts",
+    "vscode-terminal-notify.ts",
     "focus-terminal.mjs"
   ],
   "scripts": {

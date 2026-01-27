@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const SOCKET_DIRECTORY = path.join(".pi", "vscode-pi");
-const SOCKET_PREFIX = "vscode-pi-";
+const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
+const SOCKET_PREFIX = "vscode-terminal-notification-";
 
 let activeTerminalProcessId: number | undefined;
 let focused = vscode.window.state.focused;

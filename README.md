@@ -7,38 +7,34 @@ This repository contains two pieces:
 
 ## VS Code Extension
 
-Location: `packages/vscode-extension`
+Location: `packages/vscode-extension/`
 
 ```bash
 cd packages/vscode-extension
-npm install
-npm run compile
+pnpm install
+pnpm run build
 ```
 
 Load the extension in VS Code (Run → Start Debugging for extension dev) or package it using `vsce`.
 
 The extension listens on per-window sockets under:
 
-```
-~/.pi/vscode-pi/vscode-pi-<pid>.sock
+```txt
+~/.pi/vscode-terminal-notification/vscode-terminal-notification-<pid>.sock
 ```
 
 ## Pi Extension
 
-Location: `extensions/vscode-terminal-notify-socket.ts`
+Location: `packages/pi-extension/`
 
 Copy or symlink the file into your Pi extensions directory:
 
 ```bash
 mkdir -p ~/.pi/agent/extensions
-cp extensions/vscode-terminal-notify-socket.ts ~/.pi/agent/extensions/
+cp packages/pi-extension/vscode-terminal-notify.ts ~/.pi/agent/extensions/
 ```
 
-Restart Pi or start it with:
-
-```bash
-pi -e ~/.pi/agent/extensions/vscode-terminal-notify-socket.ts
-```
+Restart Pi.
 
 ## Behavior
 
