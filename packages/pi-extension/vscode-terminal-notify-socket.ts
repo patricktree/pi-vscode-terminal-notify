@@ -11,7 +11,7 @@ const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const MAX_ANCESTOR_DEPTH = 15;
 const TERMINAL_NOTIFIER_COMMAND = "terminal-notifier";
 const FOCUS_SCRIPT_NAME = "focus-terminal.mjs";
-const EXTENSION_LOG_PATH = path.join(os.homedir(), ".pi", "vscode-pi", "extension-log.txt");
+const EXTENSION_LOG_PATH = path.join(os.homedir(), ".pi", "vscode-pi", "pi-extension-log.txt");
 
 let terminalNotifierAvailablePromise: Promise<boolean> | undefined;
 
