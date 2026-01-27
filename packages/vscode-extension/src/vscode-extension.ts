@@ -6,15 +6,27 @@ import path from "node:path";
 
 const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
 const SOCKET_PREFIX = "vscode-terminal-notification-";
+const NOTIFICATION_MESSAGE = "Pi is waiting for input";
+const NOTIFICATION_ACTION = "Focus Terminal";
 
 let activeTerminalProcessId: number | undefined;
-let focused = vscode.window.state.focused;
+let windowFocused = vscode.window.state.focused;
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
-type SocketPayloadResult = {
-  ancestorPids: number[];
-  command: string;
+type SocketRequestPayload =
+  | {
+      command: "query";
+      ancestorPids: number[];
+    }
+  | {
+      command: "notify";
+      ancestorPids: number[];
+    };
+
+type SocketResponsePayload = {
+  windowFocused: boolean;
+  piTerminalActive: boolean;
 };
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -26,8 +38,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((state) => {
-      focused = state.focused;
-      log("Window focus state changed", { focused });
+      windowFocused = state.focused;
+      log("Window focus state changed", { windowFocused });
     }),
     vscode.window.onDidChangeActiveTerminal(() => {
       log("Active terminal changed");
@@ -40,11 +52,6 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.onDidCloseTerminal(() => {
       log("Terminal closed");
       void updateActiveTerminalProcessId();
-    }),
-    vscode.window.registerUriHandler({
-      handleUri: (uri) => {
-        void handleUriActivation(uri);
-      },
     }),
   );
 
@@ -77,24 +84,6 @@ export async function deactivate() {
   }
 }
 
-async function handleUriActivation(uri: vscode.Uri) {
-  const silent = isSilentUri(uri);
-  const ancestorPids = parseAncestorPidsFromUri(uri);
-  log("Received URI activation", {
-    uri: uri.toString(),
-    ancestorPids,
-    silent,
-  });
-  if (ancestorPids.length === 0) {
-    if (!silent) {
-      void vscode.window.showWarningMessage("Pi notification did not include ancestor PIDs.");
-    }
-    return;
-  }
-
-  await broadcastFocusToSockets(ancestorPids);
-}
-
 async function startServer() {
   log("Starting Pi socket server");
   const socketPath = getSocketPath();
@@ -119,43 +108,35 @@ async function startServer() {
       const line = buffer.slice(0, newlineIndex).trim();
       buffer = buffer.slice(newlineIndex + 1);
 
-      const { ancestorPids, command } = parseSocketPayload(line);
+      const socketPayload = parseSocketPayload(line);
 
-      if (command === "focus") {
-        log("Handling focus command", { ancestorPids });
-        const terminal = await findTerminalForAncestors(ancestorPids);
-        if (terminal) {
-          try {
-            await vscode.commands.executeCommand("workbench.action.focusWindow");
-            log("Focused VS Code window");
-          } catch (error) {
-            log("Failed to focus VS Code window", { error: formatError(error) });
-          }
+      switch (socketPayload.command) {
+        case "query": {
+          const piTerminalActive =
+            typeof activeTerminalProcessId === "number" &&
+            socketPayload.ancestorPids.includes(activeTerminalProcessId);
+          const response: SocketResponsePayload = {
+            windowFocused,
+            piTerminalActive,
+          };
 
-          try {
-            terminal.show(true);
-            await vscode.commands.executeCommand("workbench.action.terminal.focus");
-            log("Focused terminal panel");
-          } catch (error) {
-            log("Failed to focus terminal panel", { error: formatError(error) });
+          log("Responding to socket query", response);
+          socket.write(`${JSON.stringify(response)}\n`);
+          socket.end();
+          break;
+        }
+        case "notify": {
+          log("Handling notify command", { ancestorPids: socketPayload.ancestorPids });
+          const terminal = await findTerminalForAncestors(socketPayload.ancestorPids);
+          if (terminal) {
+            await showNotificationForTerminal(terminal);
+          } else {
+            log("No terminal matched notify request", { ancestorPids: socketPayload.ancestorPids });
           }
-        } else {
-          log("No terminal matched focus request", { ancestorPids });
+          socket.end();
+          break;
         }
       }
-
-      const piTerminalActive =
-        typeof activeTerminalProcessId === "number" &&
-        ancestorPids.includes(activeTerminalProcessId);
-
-      const response = {
-        focused,
-        piTerminalActive,
-      };
-
-      log("Responding to socket query", response);
-      socket.write(`${JSON.stringify(response)}\n`);
-      socket.end();
     };
 
     socket.on("data", (chunk) => {
@@ -184,56 +165,22 @@ async function startServer() {
   });
 }
 
-async function broadcastFocusToSockets(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths();
-  log("Broadcasting focus to sockets", {
-    count: socketPaths.length,
-    ancestorPids,
-  });
-
-  await Promise.all(
-    socketPaths.map(
-      (socketPath) =>
-        new Promise<void>((resolve) => {
-          const socket = net.createConnection({ path: socketPath });
-          socket.on("connect", () => {
-            log("Sending focus command", { socketPath });
-            socket.write(`${JSON.stringify({ command: "focus", ancestorPids })}\n`);
-            socket.end();
-          });
-          socket.on("error", (error) => {
-            log("Socket focus broadcast error", {
-              socketPath,
-              error: formatError(error),
-            });
-            resolve();
-          });
-          socket.on("close", () => {
-            log("Focus broadcast socket closed", { socketPath });
-            resolve();
-          });
-        }),
-    ),
+async function showNotificationForTerminal(terminal: vscode.Terminal) {
+  log("Showing VS Code notification");
+  const selection = await vscode.window.showInformationMessage(
+    NOTIFICATION_MESSAGE,
+    NOTIFICATION_ACTION,
   );
-  log("Finished broadcasting focus to sockets", {
-    count: socketPaths.length,
-  });
+
+  if (selection === NOTIFICATION_ACTION) {
+    await focusTerminalPanel(terminal);
+  }
 }
 
-async function listSocketPaths() {
-  const socketDirectory = path.join(os.homedir(), SOCKET_DIRECTORY);
-  log("Listing socket paths", { socketDirectory });
-  try {
-    const entries = await fs.promises.readdir(socketDirectory);
-    const paths = entries
-      .filter((entry) => entry.startsWith(SOCKET_PREFIX) && entry.endsWith(".sock"))
-      .map((entry) => path.join(socketDirectory, entry));
-    log("Listed socket paths", { count: paths.length, paths });
-    return paths;
-  } catch (error) {
-    log("Failed to list socket paths", { error: formatError(error) });
-    return [];
-  }
+async function focusTerminalPanel(terminal: vscode.Terminal) {
+  terminal.show(true);
+  await vscode.commands.executeCommand("workbench.action.terminal.focus");
+  log("Focused terminal panel");
 }
 
 async function findTerminalForAncestors(ancestorPids: number[]) {
@@ -300,53 +247,23 @@ async function updateActiveTerminalProcessId() {
   }
 }
 
-function parseAncestorPidsFromUri(uri: vscode.Uri) {
-  const params = new URLSearchParams(uri.query);
-  const raw = params.get("ancestors");
-  log("Parsing ancestor PIDs from URI", { raw });
-  if (!raw) {
-    return [];
-  }
-
-  const parsed = raw
-    .split(",")
-    .map(Number)
-    .filter((value) => Number.isFinite(value));
-  log("Parsed ancestor PIDs", { parsed });
-  return parsed;
-}
-
-function isSilentUri(uri: vscode.Uri) {
-  const params = new URLSearchParams(uri.query);
-  const silent = params.get("silent") === "1";
-  log("Parsed silent flag from URI", { silent });
-  return silent;
-}
-
-function parseSocketPayload(line: string): SocketPayloadResult {
-  let ancestorPids: number[] = [];
-  let command = "query";
-
+function parseSocketPayload(line: string): SocketRequestPayload {
   try {
     const payload = JSON.parse(line) as unknown;
-    if (isRecord(payload)) {
-      const ancestorCandidate = payload["ancestorPids"];
-      if (Array.isArray(ancestorCandidate)) {
-        ancestorPids = ancestorCandidate.filter(
-          (pid): pid is number => typeof pid === "number" && Number.isFinite(pid),
-        );
-      }
-      const commandCandidate = payload["command"];
-      if (typeof commandCandidate === "string") {
-        command = commandCandidate;
-      }
+    if (isRecord(payload) && isSocketRequestPayload(payload)) {
+      log("Received socket payload", {
+        command: payload.command,
+        ancestorPids: payload.ancestorPids,
+      });
+      return payload;
+    } else {
+      log("Socket payload is not a valid SocketRequestPayload", { payload });
+      throw new Error("Invalid socket payload");
     }
-    log("Received socket payload", { command, ancestorPids });
   } catch (error) {
     log("Failed to parse socket payload", { error: formatError(error) });
+    throw error;
   }
-
-  return { ancestorPids, command };
 }
 
 function log(message: string, data?: unknown) {
@@ -375,6 +292,16 @@ function formatError(error: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isSocketRequestPayload(value: Record<string, unknown>): value is SocketRequestPayload {
+  const command = value["command"];
+  const ancestorPids = value["ancestorPids"];
+  return (
+    (command === "query" || command === "notify") &&
+    Array.isArray(ancestorPids) &&
+    ancestorPids.every((pid) => typeof pid === "number" && Number.isFinite(pid))
+  );
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

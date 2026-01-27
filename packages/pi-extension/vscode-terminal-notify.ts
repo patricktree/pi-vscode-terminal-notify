@@ -6,11 +6,7 @@ import fs from "node:fs";
 import { execFile } from "node:child_process";
 
 const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
-const NOTIFICATION_TITLE = "Pi";
-const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const MAX_ANCESTOR_DEPTH = 15;
-const TERMINAL_NOTIFIER_COMMAND = "terminal-notifier";
-const FOCUS_SCRIPT_NAME = "focus-terminal.mjs";
 const EXTENSION_LOG_PATH = path.join(
   os.homedir(),
   ".pi",
@@ -18,10 +14,18 @@ const EXTENSION_LOG_PATH = path.join(
   "pi-extension-log.txt",
 );
 
-let terminalNotifierAvailablePromise: Promise<boolean> | undefined;
+type SocketRequestPayload =
+  | {
+      command: "query";
+      ancestorPids: number[];
+    }
+  | {
+      command: "notify";
+      ancestorPids: number[];
+    };
 
-type SocketPayload = {
-  focused: boolean;
+type SocketResponsePayload = {
+  windowFocused: boolean;
   piTerminalActive: boolean;
 };
 
@@ -64,7 +68,7 @@ async function isPiTerminalFocused(ancestorPids: number[]) {
     socketPaths.map((socketPath) => querySocket(socketPath, ancestorPids)),
   );
   const piTerminalFocused = responses.some(
-    (response) => response && response.focused && response.piTerminalActive,
+    (response) => response.windowFocused && response.piTerminalActive,
   );
 
   if (piTerminalFocused) {
@@ -77,10 +81,6 @@ async function isPiTerminalFocused(ancestorPids: number[]) {
 }
 
 async function sendNotification(ancestorPids: number[]) {
-  if (!(await isTerminalNotifierAvailable())) {
-    throw new Error("terminal-notifier is not available");
-  }
-
   const socketPaths = await listSocketPaths();
 
   log("Preparing to send notification", { socketCount: socketPaths.length });
@@ -90,41 +90,9 @@ async function sendNotification(ancestorPids: number[]) {
     return;
   }
 
-  log("Sending notification with focus command");
-  const focusCommand = await buildFocusCommand(ancestorPids);
-  log("Focus command built", { focusCommand });
-  await execFileAsync(TERMINAL_NOTIFIER_COMMAND, [
-    "-title",
-    NOTIFICATION_TITLE,
-    "-message",
-    NOTIFICATION_MESSAGE,
-    "-execute",
-    focusCommand,
-    "-group",
-    `pi-${process.pid}`,
-  ]);
-  log("Notification sent");
-}
-
-async function buildFocusCommand(ancestorPids: number[]) {
-  const nodePath = process.execPath;
-  const scriptPath = await ensureFocusScript();
-  const socketDirectory = getSocketDirectory();
-  const ancestors = ancestorPids.join(",");
-
-  return `${quoteCommandPart(nodePath)} ${quoteCommandPart(scriptPath)} ${quoteCommandPart(
-    socketDirectory,
-  )} ${quoteCommandPart(ancestors)}`;
-}
-
-async function ensureFocusScript() {
-  const socketDirectory = getSocketDirectory();
-  await fs.promises.mkdir(socketDirectory, { recursive: true });
-  const scriptPath = getFocusScriptPath();
-  const scriptSourceUrl = new URL("focus-terminal.mjs", import.meta.url);
-  const script = await fs.promises.readFile(scriptSourceUrl, "utf8");
-  await fs.promises.writeFile(scriptPath, script, "utf8");
-  return scriptPath;
+  log("Sending VS Code notification command");
+  await Promise.all(socketPaths.map((socketPath) => notifySocket(socketPath, ancestorPids)));
+  log("Notification command sent");
 }
 
 async function listSocketPaths() {
@@ -143,20 +111,22 @@ async function listSocketPaths() {
 }
 
 async function querySocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<{ focused: boolean; piTerminalActive: boolean } | undefined>((resolve) => {
+  return new Promise<SocketResponsePayload>((resolve, reject) => {
     const socket = net.createConnection({ path: socketPath });
     let buffer = "";
 
     socket.on("connect", () => {
       log("Connected to socket", { socketPath });
-      socket.write(`${JSON.stringify({ command: "query", ancestorPids })}\n`);
+      socket.write(
+        `${JSON.stringify({ command: "query", ancestorPids } satisfies SocketRequestPayload)}\n`,
+      );
     });
 
     socket.on("data", (chunk) => {
       buffer += chunk.toString();
       const newlineIndex = buffer.indexOf("\n");
       if (newlineIndex === -1) {
-        return;
+        throw new Error("Incomplete socket response");
       }
 
       const line = buffer.slice(0, newlineIndex).trim();
@@ -169,19 +139,17 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
           error: formatError(error),
         });
         socket.end();
-        resolve(undefined);
+        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+        reject(error);
         return;
       }
 
       if (isSocketPayload(payload)) {
         log("Received socket response", { socketPath, payload });
-        resolve({
-          focused: payload.focused,
-          piTerminalActive: payload.piTerminalActive,
-        });
+        resolve(payload);
       } else {
         log("Unexpected socket payload", { socketPath, payload });
-        resolve(undefined);
+        reject(new Error("Unexpected socket payload"));
       }
 
       socket.end();
@@ -189,34 +157,38 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
 
     socket.on("error", (error) => {
       log("Socket connection error", { socketPath, error: formatError(error) });
-      resolve(undefined);
+      reject(new Error(formatError(error)));
     });
 
     socket.setTimeout(1000, () => {
       log("Socket query timed out", { socketPath });
       socket.destroy();
-      resolve(undefined);
+      reject(new Error("Socket query timed out"));
     });
   });
 }
 
-async function isTerminalNotifierAvailable() {
-  if (!terminalNotifierAvailablePromise) {
-    terminalNotifierAvailablePromise = (async () => {
-      try {
-        await execFileAsync("which", [TERMINAL_NOTIFIER_COMMAND]);
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-  }
+async function notifySocket(socketPath: string, ancestorPids: number[]) {
+  return new Promise<void>((resolve, reject) => {
+    const socket = net.createConnection({ path: socketPath });
 
-  const available = await terminalNotifierAvailablePromise;
-  log("Terminal notifier availability", {
-    available,
+    socket.on("connect", () => {
+      log("Sending notify command", { socketPath });
+      socket.write(
+        `${JSON.stringify({ command: "notify", ancestorPids } satisfies SocketRequestPayload)}\n`,
+      );
+      socket.end();
+    });
+
+    socket.on("error", (error) => {
+      log("Notify socket error", { socketPath, error: formatError(error) });
+      reject(error);
+    });
+
+    socket.on("close", () => {
+      resolve();
+    });
   });
-  return available;
 }
 
 async function getParentPid(pid: number) {
@@ -236,14 +208,6 @@ function getSocketDirectory() {
   return path.join(os.homedir(), SOCKET_DIRECTORY);
 }
 
-function getFocusScriptPath() {
-  return path.join(getSocketDirectory(), FOCUS_SCRIPT_NAME);
-}
-
-function quoteCommandPart(value: string) {
-  return JSON.stringify(value);
-}
-
 function execFileAsync(command: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     execFile(command, args, (error, stdout, stderr) => {
@@ -257,13 +221,15 @@ function execFileAsync(command: string, args: string[]) {
   });
 }
 
-function isSocketPayload(value: unknown): value is SocketPayload {
+function isSocketPayload(value: unknown): value is SocketResponsePayload {
   if (typeof value !== "object" || value === null) {
     return false;
   }
 
   const record = value as Record<string, unknown>;
-  return typeof record["focused"] === "boolean" && typeof record["piTerminalActive"] === "boolean";
+  return (
+    typeof record["windowFocused"] === "boolean" && typeof record["piTerminalActive"] === "boolean"
+  );
 }
 
 function log(message: string, data?: unknown) {
