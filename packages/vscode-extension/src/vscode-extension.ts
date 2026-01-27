@@ -3,11 +3,13 @@ import net from "node:net";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
 
 const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
 const SOCKET_PREFIX = "vscode-terminal-notification-";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const NOTIFICATION_ACTION = "Focus Terminal";
+const VSCODE_APP_NAME = "Visual Studio Code";
 
 let activeTerminalProcessId: number | undefined;
 let windowFocused = vscode.window.state.focused;
@@ -22,11 +24,20 @@ type SocketRequestPayload =
   | {
       command: "notify";
       ancestorPids: number[];
+    }
+  | {
+      command: "locate";
+      ancestorPids: number[];
     };
 
 type SocketResponsePayload = {
   windowFocused: boolean;
   piTerminalActive: boolean;
+};
+
+type SocketLocateResponsePayload = {
+  ownsTerminal: boolean;
+  workspacePath: string | null;
 };
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -127,12 +138,19 @@ async function startServer() {
         }
         case "notify": {
           log("Handling notify command", { ancestorPids: socketPayload.ancestorPids });
+          await showNotificationForAncestors(socketPayload.ancestorPids);
+          socket.end();
+          break;
+        }
+        case "locate": {
+          log("Handling locate command", { ancestorPids: socketPayload.ancestorPids });
           const terminal = await findTerminalForAncestors(socketPayload.ancestorPids);
-          if (terminal) {
-            await showNotificationForTerminal(terminal);
-          } else {
-            log("No terminal matched notify request", { ancestorPids: socketPayload.ancestorPids });
-          }
+          const response: SocketLocateResponsePayload = {
+            ownsTerminal: Boolean(terminal),
+            workspacePath: terminal ? getWorkspaceLaunchPath() : null,
+          };
+          log("Responding to locate request", response);
+          socket.write(`${JSON.stringify(response)}\n`);
           socket.end();
           break;
         }
@@ -165,16 +183,39 @@ async function startServer() {
   });
 }
 
-async function showNotificationForTerminal(terminal: vscode.Terminal) {
-  log("Showing VS Code notification");
+async function showNotificationForAncestors(ancestorPids: number[]) {
+  log("Showing VS Code notification", { ancestorPids });
   const selection = await vscode.window.showInformationMessage(
     NOTIFICATION_MESSAGE,
     NOTIFICATION_ACTION,
   );
 
   if (selection === NOTIFICATION_ACTION) {
-    await focusTerminalPanel(terminal);
+    await handleFocusTerminalAction(ancestorPids);
   }
+}
+
+async function handleFocusTerminalAction(ancestorPids: number[]) {
+  log("Focus Terminal action selected", { ancestorPids });
+  const localTerminal = await findTerminalForAncestors(ancestorPids);
+  if (localTerminal) {
+    const localWorkspacePath = getWorkspaceLaunchPath();
+    if (localWorkspacePath) {
+      await bringWindowToForeground(localWorkspacePath);
+    } else {
+      log("No workspace path resolved for local window");
+    }
+    await focusTerminalPanel(localTerminal);
+    return;
+  }
+
+  const workspacePath = await resolveOwningWorkspacePath(ancestorPids);
+  if (!workspacePath) {
+    log("Unable to resolve owning window workspace path", { ancestorPids });
+    return;
+  }
+
+  await bringWindowToForeground(workspacePath);
 }
 
 async function focusTerminalPanel(terminal: vscode.Terminal) {
@@ -223,6 +264,135 @@ async function terminalMatchesAncestors(terminal: vscode.Terminal, ancestorPids:
   } catch (error) {
     log("Failed to read terminal processId", { error: formatError(error) });
     return false;
+  }
+}
+
+async function resolveOwningWorkspacePath(ancestorPids: number[]) {
+  const socketPaths = await listSocketPaths();
+  if (socketPaths.length === 0) {
+    log("No socket paths available to resolve owning window");
+    return undefined;
+  }
+
+  const results = await Promise.allSettled(
+    socketPaths.map((socketPath) => locateSocket(socketPath, ancestorPids)),
+  );
+
+  for (const result of results) {
+    if (result.status !== "fulfilled") {
+      continue;
+    }
+
+    if (result.value.ownsTerminal && result.value.workspacePath) {
+      log("Resolved owning window", {
+        socketPath: result.value.socketPath,
+        workspacePath: result.value.workspacePath,
+      });
+      return result.value.workspacePath;
+    }
+  }
+
+  log("No owning window resolved from socket scan", { ancestorPids });
+  return undefined;
+}
+
+async function listSocketPaths() {
+  const socketDirectory = getSocketDirectory();
+  try {
+    const entries = await fs.promises.readdir(socketDirectory);
+    const paths = entries
+      .filter((entry) => entry.endsWith(".sock"))
+      .map((entry) => path.join(socketDirectory, entry));
+    log("Listed socket paths", { count: paths.length, paths });
+    return paths;
+  } catch (error) {
+    log("Failed to list socket paths", { error: formatError(error) });
+    return [];
+  }
+}
+
+async function locateSocket(socketPath: string, ancestorPids: number[]) {
+  return new Promise<SocketLocateResponsePayload & { socketPath: string }>((resolve, reject) => {
+    const socket = net.createConnection({ path: socketPath });
+    let buffer = "";
+
+    socket.on("connect", () => {
+      log("Sending locate command", { socketPath });
+      socket.write(
+        `${JSON.stringify({ command: "locate", ancestorPids } satisfies SocketRequestPayload)}\n`,
+      );
+    });
+
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString();
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex === -1) {
+        log("Waiting for complete locate response", { socketPath });
+        return;
+      }
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      let payload: unknown;
+      try {
+        payload = JSON.parse(line) as unknown;
+      } catch (error) {
+        log("Failed to parse locate response", { socketPath, error: formatError(error) });
+        socket.end();
+        const parseError = error instanceof Error ? error : new Error(formatError(error));
+        reject(parseError);
+        return;
+      }
+
+      if (isSocketLocateResponsePayload(payload)) {
+        resolve({ ...payload, socketPath });
+      } else {
+        log("Unexpected locate payload", { socketPath, payload });
+        reject(new Error("Unexpected locate payload"));
+      }
+
+      socket.end();
+    });
+
+    socket.on("error", (error) => {
+      log("Locate socket error", { socketPath, error: formatError(error) });
+      reject(error);
+    });
+
+    socket.setTimeout(1000, () => {
+      log("Locate socket timed out", { socketPath });
+      socket.destroy();
+      reject(new Error("Locate socket timed out"));
+    });
+  });
+}
+
+function getWorkspaceLaunchPath() {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  if (workspaceFolder) {
+    return workspaceFolder.uri.fsPath;
+  }
+
+  const workspaceFile = vscode.workspace.workspaceFile;
+  if (workspaceFile) {
+    return path.dirname(workspaceFile.fsPath);
+  }
+
+  return null;
+}
+
+async function bringWindowToForeground(workspacePath: string) {
+  if (process.platform !== "darwin") {
+    log("Skipping foreground focus because platform is not darwin", {
+      platform: process.platform,
+    });
+    return;
+  }
+
+  log("Bringing VS Code window to foreground", { workspacePath });
+  try {
+    await execFileAsync("open", ["-a", VSCODE_APP_NAME, workspacePath]);
+  } catch (error) {
+    log("Failed to bring VS Code window to foreground", { error: formatError(error) });
   }
 }
 
@@ -298,9 +468,23 @@ function isSocketRequestPayload(value: Record<string, unknown>): value is Socket
   const command = value["command"];
   const ancestorPids = value["ancestorPids"];
   return (
-    (command === "query" || command === "notify") &&
+    (command === "query" || command === "notify" || command === "locate") &&
     Array.isArray(ancestorPids) &&
     ancestorPids.every((pid) => typeof pid === "number" && Number.isFinite(pid))
+  );
+}
+
+function isSocketLocateResponsePayload(value: unknown): value is SocketLocateResponsePayload {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+  const ownsTerminal = record["ownsTerminal"];
+  const workspacePath = record["workspacePath"];
+  return (
+    typeof ownsTerminal === "boolean" &&
+    (typeof workspacePath === "string" || workspacePath === null)
   );
 }
 
@@ -310,12 +494,29 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 
 function getSocketPath() {
   const socketPath = path.join(
-    os.homedir(),
-    SOCKET_DIRECTORY,
+    getSocketDirectory(),
     `${SOCKET_PREFIX}${process.pid}.sock`,
   );
   log("Computed socket path", { socketPath });
   return socketPath;
+}
+
+function getSocketDirectory() {
+  return path.join(os.homedir(), SOCKET_DIRECTORY);
+}
+
+function execFileAsync(command: string, args: string[]) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    execFile(command, args, (error, stdout, stderr) => {
+      if (error) {
+        const execError = error instanceof Error ? error : new Error(formatError(error));
+        reject(execError);
+        return;
+      }
+
+      resolve({ stdout, stderr });
+    });
+  });
 }
 
 async function ensureSocketDirectory(socketPath: string) {
