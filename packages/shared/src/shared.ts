@@ -4,19 +4,9 @@ import path from "node:path";
 import zod from "zod";
 
 export const VscodeTerminalNotifySocketProtoSchema = zod.object({
-  query: zod.object({
+  maybeNotify: zod.object({
     request: zod.object({
-      command: zod.literal("query"),
-      ancestorPids: zod.array(zod.number()),
-    }),
-    response: zod.object({
-      windowFocused: zod.boolean(),
-      piTerminalActive: zod.boolean(),
-    }),
-  }),
-  notify: zod.object({
-    request: zod.object({
-      command: zod.literal("notify"),
+      command: zod.literal("maybeNotify"),
       ancestorPids: zod.array(zod.number()),
     }),
     response: zod.never(),
@@ -39,8 +29,7 @@ export type VscodeTerminalNotifySocketProto = zod.infer<
 
 /** Union schema for parsing any incoming socket request */
 export const VscodeTerminalNotifySocketRequestSchema = zod.union([
-  VscodeTerminalNotifySocketProtoSchema.shape.query.shape.request,
-  VscodeTerminalNotifySocketProtoSchema.shape.notify.shape.request,
+  VscodeTerminalNotifySocketProtoSchema.shape.maybeNotify.shape.request,
   VscodeTerminalNotifySocketProtoSchema.shape.locate.shape.request,
 ]);
 

@@ -21,37 +21,14 @@ const NOTIFICATION_TITLE = "Pi";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
 
-let activeTerminalProcessId: number | undefined;
-let windowFocused = vscode.window.state.focused;
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(_context: vscode.ExtensionContext) {
   assertDarwin();
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
-
-  await updateActiveTerminalProcessId();
-
-  context.subscriptions.push(
-    vscode.window.onDidChangeWindowState((state) => {
-      windowFocused = state.focused;
-      log("Window focus state changed", { windowFocused });
-    }),
-    vscode.window.onDidChangeActiveTerminal(() => {
-      log("Active terminal changed");
-      void updateActiveTerminalProcessId();
-    }),
-    vscode.window.onDidOpenTerminal(() => {
-      log("Terminal opened");
-      void updateActiveTerminalProcessId();
-    }),
-    vscode.window.onDidCloseTerminal(() => {
-      log("Terminal closed");
-      void updateActiveTerminalProcessId();
-    }),
-  );
 
   await startServer();
   log("Extension activated");
@@ -109,23 +86,9 @@ async function startServer() {
       const socketPayload = parseSocketPayload(line);
 
       switch (socketPayload.command) {
-        case "query": {
-          const piTerminalActive =
-            typeof activeTerminalProcessId === "number" &&
-            socketPayload.ancestorPids.includes(activeTerminalProcessId);
-          const response: VscodeTerminalNotifySocketProto["query"]["response"] = {
-            windowFocused,
-            piTerminalActive,
-          };
-
-          log("Responding to socket query", response);
-          socket.write(`${JSON.stringify(response)}\n`);
-          socket.end();
-          break;
-        }
-        case "notify": {
-          log("Handling notify command", { ancestorPids: socketPayload.ancestorPids });
-          await showNotificationForAncestors(socketPayload.ancestorPids);
+        case "maybeNotify": {
+          log("Handling maybeNotify command", { ancestorPids: socketPayload.ancestorPids });
+          await handleMaybeNotify(socketPayload.ancestorPids);
           socket.end();
           break;
         }
@@ -170,13 +133,28 @@ async function startServer() {
   });
 }
 
-async function showNotificationForAncestors(ancestorPids: number[]) {
+async function handleMaybeNotify(ancestorPids: number[]) {
   const terminal = await findTerminalForAncestors(ancestorPids);
   if (!terminal) {
     log("Skipping notification - terminal not owned by this window", { ancestorPids });
     return;
   }
 
+  const windowFocused = vscode.window.state.focused;
+  const activeTerminal = vscode.window.activeTerminal;
+  const piTerminalActive = activeTerminal === terminal;
+
+  log("Checking notification conditions", { windowFocused, piTerminalActive });
+
+  if (windowFocused && piTerminalActive) {
+    log("Skipping notification - Pi terminal is focused");
+    return;
+  }
+
+  showNotification(ancestorPids, terminal);
+}
+
+function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
   const workspacePath = getWorkspaceLaunchPath();
   const workspaceTitle = workspacePath ? path.basename(workspacePath) : NOTIFICATION_TITLE;
   const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
@@ -387,27 +365,6 @@ async function bringWindowToForeground(workspacePath: string) {
     await execFileAsync("open", ["-a", VSCODE_APP_NAME, workspacePath]);
   } catch (error) {
     log("Failed to bring VS Code window to foreground", { error: formatError(error) });
-  }
-}
-
-async function updateActiveTerminalProcessId() {
-  const activeTerminal = vscode.window.activeTerminal;
-  log("Refreshing active terminal processId", {
-    hasActiveTerminal: Boolean(activeTerminal),
-  });
-  if (!activeTerminal) {
-    activeTerminalProcessId = undefined;
-    log("Active terminal cleared (none present)");
-    return;
-  }
-
-  try {
-    const pid = await activeTerminal.processId;
-    activeTerminalProcessId = pid ?? undefined;
-    log("Updated active terminal processId", { pid: activeTerminalProcessId });
-  } catch (error) {
-    log("Failed to read active terminal processId", { error: formatError(error) });
-    activeTerminalProcessId = undefined;
   }
 }
 

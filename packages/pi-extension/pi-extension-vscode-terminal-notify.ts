@@ -3,7 +3,6 @@ import {
   assertDarwin,
   formatError,
   listSocketPaths,
-  VscodeTerminalNotifySocketProtoSchema,
   type VscodeTerminalNotifySocketProto,
 } from "@patricktree/pi-vscode-terminal-notify.shared";
 import net from "node:net";
@@ -24,11 +23,7 @@ export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
   assertDarwin();
   pi.on("agent_end", async () => {
     const ancestorPids = await getAncestorPids();
-    const piTerminalFocused = await isPiTerminalFocused(ancestorPids);
-
-    if (!piTerminalFocused) {
-      await sendNotification(ancestorPids);
-    }
+    await sendMaybeNotify(ancestorPids);
   });
 }
 
@@ -54,112 +49,33 @@ async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
   return ancestors;
 }
 
-async function isPiTerminalFocused(ancestorPids: number[]) {
+async function sendMaybeNotify(ancestorPids: number[]) {
   const socketPaths = await listSocketPaths(log);
-  const responses = await Promise.all(
-    socketPaths.map((socketPath) => querySocket(socketPath, ancestorPids)),
-  );
-  const piTerminalFocused = responses.some(
-    (response) => response.windowFocused && response.piTerminalActive,
-  );
-
-  if (piTerminalFocused) {
-    log("Pi terminal is focused");
-    return true;
-  }
-
-  log("Pi terminal is not focused");
-  return false;
-}
-
-async function sendNotification(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths(log);
-
-  log("Preparing to send notification", { socketCount: socketPaths.length });
 
   if (socketPaths.length === 0) {
-    log("No Pi terminal sockets found, skipping notification");
+    log("No VS Code sockets found, skipping notification");
     return;
   }
 
-  log("Sending VS Code notification command");
-  await Promise.all(socketPaths.map((socketPath) => notifySocket(socketPath, ancestorPids)));
-  log("Notification command sent");
+  log("Sending maybeNotify to VS Code windows", { socketCount: socketPaths.length });
+  await Promise.all(socketPaths.map((socketPath) => maybeNotifySocket(socketPath, ancestorPids)));
+  log("maybeNotify sent to all sockets");
 }
 
-async function querySocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<VscodeTerminalNotifySocketProto["query"]["response"]>((resolve, reject) => {
-    const socket = net.createConnection({ path: socketPath });
-    let buffer = "";
-
-    socket.on("connect", () => {
-      log("Connected to socket", { socketPath });
-      socket.write(
-        `${JSON.stringify({ command: "query", ancestorPids } satisfies VscodeTerminalNotifySocketProto["query"]["request"])}\n`,
-      );
-    });
-
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString();
-      const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) {
-        throw new Error("Incomplete socket response");
-      }
-
-      const line = buffer.slice(0, newlineIndex).trim();
-      let payload: unknown;
-      try {
-        payload = JSON.parse(line) as unknown;
-      } catch (error) {
-        log("Failed to parse socket response", {
-          socketPath,
-          error: formatError(error),
-        });
-        socket.end();
-        // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-        reject(error);
-        return;
-      }
-
-      try {
-        const parsedPayload =
-          VscodeTerminalNotifySocketProtoSchema.shape.query.shape.response.parse(payload);
-        resolve(parsedPayload);
-      } catch {
-        log("Unexpected socket payload", { socketPath, payload });
-        reject(new Error("Unexpected socket payload"));
-      }
-
-      socket.end();
-    });
-
-    socket.on("error", (error) => {
-      log("Socket connection error", { socketPath, error: formatError(error) });
-      reject(new Error(formatError(error)));
-    });
-
-    socket.setTimeout(1000, () => {
-      log("Socket query timed out", { socketPath });
-      socket.destroy();
-      reject(new Error("Socket query timed out"));
-    });
-  });
-}
-
-async function notifySocket(socketPath: string, ancestorPids: number[]) {
+async function maybeNotifySocket(socketPath: string, ancestorPids: number[]) {
   return new Promise<void>((resolve, reject) => {
     const socket = net.createConnection({ path: socketPath });
 
     socket.on("connect", () => {
-      log("Sending notify command", { socketPath });
+      log("Sending maybeNotify command", { socketPath });
       socket.write(
-        `${JSON.stringify({ command: "notify", ancestorPids } satisfies VscodeTerminalNotifySocketProto["notify"]["request"])}\n`,
+        `${JSON.stringify({ command: "maybeNotify", ancestorPids } satisfies VscodeTerminalNotifySocketProto["maybeNotify"]["request"])}\n`,
       );
       socket.end();
     });
 
     socket.on("error", (error) => {
-      log("Notify socket error", { socketPath, error: formatError(error) });
+      log("maybeNotify socket error", { socketPath, error: formatError(error) });
       reject(error);
     });
 
