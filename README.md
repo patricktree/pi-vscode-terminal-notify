@@ -1,5 +1,7 @@
 # Pi ↔ VS Code Terminal Notification Socket
 
+macOS-only. Extensions throw on non-darwin platforms.
+
 This repository contains two pieces:
 
 1. **VS Code extension** that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.

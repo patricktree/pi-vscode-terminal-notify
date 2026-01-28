@@ -30,6 +30,7 @@ type SocketResponsePayload = {
 };
 
 export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
+  assertDarwin();
   pi.on("agent_end", async () => {
     const ancestorPids = await getAncestorPids();
     const piTerminalFocused = await isPiTerminalFocused(ancestorPids);
@@ -206,6 +207,12 @@ async function getParentPid(pid: number) {
 
 function getSocketDirectory() {
   return path.join(os.homedir(), SOCKET_DIRECTORY);
+}
+
+function assertDarwin() {
+  if (process.platform !== "darwin") {
+    throw new Error("Pi VS Code terminal notifications are only supported on MacOS");
+  }
 }
 
 function execFileAsync(command: string, args: string[]) {

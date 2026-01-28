@@ -42,6 +42,7 @@ type SocketLocateResponsePayload = {
 };
 
 export async function activate(context: vscode.ExtensionContext) {
+  assertDarwin();
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
@@ -185,10 +186,6 @@ async function startServer() {
 }
 
 async function showNotificationForAncestors(ancestorPids: number[]) {
-  if (process.platform !== "darwin") {
-    throw new Error("Notifications are only supported on MacOS");
-  }
-
   const terminal = await findTerminalForAncestors(ancestorPids);
   const workspacePath = terminal
     ? getWorkspaceLaunchPath()
@@ -408,13 +405,6 @@ function getWorkspaceLaunchPath() {
 }
 
 async function bringWindowToForeground(workspacePath: string) {
-  if (process.platform !== "darwin") {
-    log("Skipping foreground focus because platform is not darwin", {
-      platform: process.platform,
-    });
-    return;
-  }
-
   log("Bringing VS Code window to foreground", { workspacePath });
   try {
     await execFileAsync("open", ["-a", VSCODE_APP_NAME, workspacePath]);
@@ -460,6 +450,12 @@ function parseSocketPayload(line: string): SocketRequestPayload {
   } catch (error) {
     log("Failed to parse socket payload", { error: formatError(error) });
     throw error;
+  }
+}
+
+function assertDarwin() {
+  if (process.platform !== "darwin") {
+    throw new Error("Pi VS Code terminal notifications are only supported on MacOS");
   }
 }
 

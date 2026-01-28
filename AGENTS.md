@@ -2,8 +2,8 @@
 
 ## Repo Structure
 
-- `packages/vscode-extension/`: VS Code extension exposing window focus + active terminal PID via a Unix socket.
-- `packages/pi-extension/`: Pi extension that listens for `agent_end` and triggers notifications via the socket.
+- `packages/vscode-extension/`: VS Code extension that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.
+- `packages/pi-extension/`: Pi extension that queries the socket on `agent_end` and triggers notifications when Pi is not the active VS Code terminal.
 
 ## Validation
 
