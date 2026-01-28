@@ -2,10 +2,9 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
   assertDarwin,
   formatError,
-  isSocketPayload,
   listSocketPaths,
-  type SocketRequestPayload,
-  type SocketResponsePayload,
+  VscodeTerminalNotifySocketProtoSchema,
+  type VscodeTerminalNotifySocketProto,
 } from "@patricktree/pi-vscode-terminal-notify.shared";
 import net from "node:net";
 import os from "node:os";
@@ -89,14 +88,14 @@ async function sendNotification(ancestorPids: number[]) {
 }
 
 async function querySocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<SocketResponsePayload>((resolve, reject) => {
+  return new Promise<VscodeTerminalNotifySocketProto["query"]["response"]>((resolve, reject) => {
     const socket = net.createConnection({ path: socketPath });
     let buffer = "";
 
     socket.on("connect", () => {
       log("Connected to socket", { socketPath });
       socket.write(
-        `${JSON.stringify({ command: "query", ancestorPids } satisfies SocketRequestPayload)}\n`,
+        `${JSON.stringify({ command: "query", ancestorPids } satisfies VscodeTerminalNotifySocketProto["query"]["request"])}\n`,
       );
     });
 
@@ -122,10 +121,11 @@ async function querySocket(socketPath: string, ancestorPids: number[]) {
         return;
       }
 
-      if (isSocketPayload(payload)) {
-        log("Received socket response", { socketPath, payload });
-        resolve(payload);
-      } else {
+      try {
+        const parsedPayload =
+          VscodeTerminalNotifySocketProtoSchema.shape.query.shape.response.parse(payload);
+        resolve(parsedPayload);
+      } catch {
         log("Unexpected socket payload", { socketPath, payload });
         reject(new Error("Unexpected socket payload"));
       }
@@ -153,7 +153,7 @@ async function notifySocket(socketPath: string, ancestorPids: number[]) {
     socket.on("connect", () => {
       log("Sending notify command", { socketPath });
       socket.write(
-        `${JSON.stringify({ command: "notify", ancestorPids } satisfies SocketRequestPayload)}\n`,
+        `${JSON.stringify({ command: "notify", ancestorPids } satisfies VscodeTerminalNotifySocketProto["notify"]["request"])}\n`,
       );
       socket.end();
     });

@@ -31,7 +31,8 @@
     "eslint-plugin-unicorn": "^55.0.0",
     "prettier": "^3.3.3",
     "prettier-plugin-packagejson": "^2.5.2",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "zod": "^4.3.6"
   },
   "packageManager": "pnpm@10.28.2",
   "engines": {

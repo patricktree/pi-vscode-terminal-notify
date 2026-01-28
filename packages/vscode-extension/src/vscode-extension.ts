@@ -6,9 +6,10 @@ import {
   getSocketDirectory,
   isRecord,
   listSocketPaths,
-  type SocketLocateResponsePayload,
-  type SocketRequestPayload,
-  type SocketResponsePayload,
+  VscodeTerminalNotifySocketProtoSchema,
+  VscodeTerminalNotifySocketRequestSchema,
+  type VscodeTerminalNotifySocketProto,
+  type VscodeTerminalNotifySocketRequest,
 } from "@patricktree/pi-vscode-terminal-notify.shared";
 import net from "node:net";
 import fs from "node:fs";
@@ -112,7 +113,7 @@ async function startServer() {
           const piTerminalActive =
             typeof activeTerminalProcessId === "number" &&
             socketPayload.ancestorPids.includes(activeTerminalProcessId);
-          const response: SocketResponsePayload = {
+          const response: VscodeTerminalNotifySocketProto["query"]["response"] = {
             windowFocused,
             piTerminalActive,
           };
@@ -131,7 +132,7 @@ async function startServer() {
         case "locate": {
           log("Handling locate command", { ancestorPids: socketPayload.ancestorPids });
           const terminal = await findTerminalForAncestors(socketPayload.ancestorPids);
-          const response: SocketLocateResponsePayload = {
+          const response: VscodeTerminalNotifySocketProto["locate"]["response"] = {
             ownsTerminal: Boolean(terminal),
             workspacePath: terminal ? getWorkspaceLaunchPath() : null,
           };
@@ -305,14 +306,16 @@ async function resolveOwningWorkspacePath(ancestorPids: number[]) {
 }
 
 async function locateSocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<SocketLocateResponsePayload & { socketPath: string }>((resolve, reject) => {
+  return new Promise<
+    VscodeTerminalNotifySocketProto["locate"]["response"] & { socketPath: string }
+  >((resolve, reject) => {
     const socket = net.createConnection({ path: socketPath });
     let buffer = "";
 
     socket.on("connect", () => {
       log("Sending locate command", { socketPath });
       socket.write(
-        `${JSON.stringify({ command: "locate", ancestorPids } satisfies SocketRequestPayload)}\n`,
+        `${JSON.stringify({ command: "locate", ancestorPids } satisfies VscodeTerminalNotifySocketProto["locate"]["request"])}\n`,
       );
     });
 
@@ -325,9 +328,9 @@ async function locateSocket(socketPath: string, ancestorPids: number[]) {
       }
 
       const line = buffer.slice(0, newlineIndex).trim();
-      let payload: unknown;
+      let json: unknown;
       try {
-        payload = JSON.parse(line) as unknown;
+        json = JSON.parse(line) as unknown;
       } catch (error) {
         log("Failed to parse locate response", { socketPath, error: formatError(error) });
         socket.end();
@@ -336,10 +339,12 @@ async function locateSocket(socketPath: string, ancestorPids: number[]) {
         return;
       }
 
-      if (isSocketLocateResponsePayload(payload)) {
+      try {
+        const payload =
+          VscodeTerminalNotifySocketProtoSchema.shape.locate.shape.response.parse(json);
         resolve({ ...payload, socketPath });
-      } else {
-        log("Unexpected locate payload", { socketPath, payload });
+      } catch {
+        log("Unexpected locate payload", { socketPath, payload: json });
         reject(new Error("Unexpected locate payload"));
       }
 
@@ -403,19 +408,15 @@ async function updateActiveTerminalProcessId() {
   }
 }
 
-function parseSocketPayload(line: string): SocketRequestPayload {
+function parseSocketPayload(line: string): VscodeTerminalNotifySocketRequest {
   try {
-    const payload = JSON.parse(line) as unknown;
-    if (isRecord(payload) && isSocketRequestPayload(payload)) {
-      log("Received socket payload", {
-        command: payload.command,
-        ancestorPids: payload.ancestorPids,
-      });
-      return payload;
-    } else {
-      log("Socket payload is not a valid SocketRequestPayload", { payload });
-      throw new Error("Invalid socket payload");
-    }
+    const json = JSON.parse(line) as unknown;
+    const payload = VscodeTerminalNotifySocketRequestSchema.parse(json);
+    log("Received socket payload", {
+      command: payload.command,
+      ancestorPids: payload.ancestorPids,
+    });
+    return payload;
   } catch (error) {
     log("Failed to parse socket payload", { error: formatError(error) });
     throw error;
@@ -439,30 +440,6 @@ function isNotificationMetadata(value: unknown): value is { activationType?: str
 
   const activationType = value["activationType"];
   return typeof activationType === "string";
-}
-
-function isSocketRequestPayload(value: Record<string, unknown>): value is SocketRequestPayload {
-  const command = value["command"];
-  const ancestorPids = value["ancestorPids"];
-  return (
-    (command === "query" || command === "notify" || command === "locate") &&
-    Array.isArray(ancestorPids) &&
-    ancestorPids.every((pid) => typeof pid === "number" && Number.isFinite(pid))
-  );
-}
-
-function isSocketLocateResponsePayload(value: unknown): value is SocketLocateResponsePayload {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-  const ownsTerminal = record["ownsTerminal"];
-  const workspacePath = record["workspacePath"];
-  return (
-    typeof ownsTerminal === "boolean" &&
-    (typeof workspacePath === "string" || workspacePath === null)
-  );
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
