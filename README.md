@@ -67,7 +67,7 @@ Then add the extension file as a local package in your Pi settings (global
 ```json
 {
   "packages": [
-    "/absolute/path/to/pi-extension-vscode-terminal-notification/packages/pi-extension"
+    "/absolute/path/to/pi-vscode-terminal-notify/packages/pi-extension"
   ]
 }
 ```
