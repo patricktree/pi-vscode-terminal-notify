@@ -2,10 +2,15 @@
 
 macOS-only. Extensions throw on non-darwin platforms.
 
-This repository contains two pieces:
+This repository contains three pieces:
 
 1. **VS Code extension** that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.
 2. **Pi extension** that queries the socket on `agent_end` and triggers notifications when Pi is not the active VS Code terminal.
+3. **Shared package** with socket types + helpers used by both extensions.
+
+## Shared Package
+
+Location: `packages/shared/`
 
 ## VS Code Extension
 
@@ -38,11 +43,24 @@ Notifications are macOS-only; other platforms will reject the `notify` command.
 
 Location: `packages/pi-extension/`
 
-Copy or symlink the file into your Pi extensions directory:
+This extension now depends on the shared package, so install it via Pi packages using a local path (Pi will resolve dependencies from this repo).
+
+Build the workspace first:
 
 ```bash
-mkdir -p ~/.pi/agent/extensions
-cp packages/pi-extension/pi-extension-vscode-terminal-notify.ts ~/.pi/agent/extensions/
+pnpm install
+pnpm -r run build
+```
+
+Then add the extension file as a local package in your Pi settings (global
+`~/.pi/agent/settings.json` or project `.pi/settings.json`):
+
+```json
+{
+  "packages": [
+    "/absolute/path/to/pi-extension-vscode-terminal-notification/packages/pi-extension"
+  ]
+}
 ```
 
 Restart Pi.

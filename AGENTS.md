@@ -4,6 +4,7 @@
 
 - `packages/vscode-extension/`: VS Code extension that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.
 - `packages/pi-extension/`: Pi extension that queries the socket on `agent_end` and triggers notifications when Pi is not the active VS Code terminal.
+- `packages/shared/`: Shared socket types/utilities used by both extensions.
 
 ## Validation
 

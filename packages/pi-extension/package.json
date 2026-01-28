@@ -1,6 +1,9 @@
 {
   "name": "@patricktree/pi-vscode-terminal-notify.pi-extension",
   "private": true,
+  "keywords": [
+    "pi-package"
+  ],
   "type": "module",
   "files": [
     "pi-extension-vscode-terminal-notify.ts"
@@ -13,6 +16,9 @@
     "lint:file": "eslint --max-warnings 0",
     "lint:file:fix": "eslint --max-warnings 0 --fix",
     "lint:fix": "eslint --max-warnings 0 . --fix"
+  },
+  "dependencies": {
+    "@patricktree/pi-vscode-terminal-notify.shared": "workspace:*"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "^0.49.3",
@@ -35,5 +41,10 @@
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "pnpm": "10.28.2"
+  },
+  "pi": {
+    "extensions": [
+      "./pi-extension-vscode-terminal-notify.ts"
+    ]
   }
 }

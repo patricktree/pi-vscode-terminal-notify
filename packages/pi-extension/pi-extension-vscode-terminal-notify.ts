@@ -1,11 +1,18 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import {
+  assertDarwin,
+  formatError,
+  isSocketPayload,
+  listSocketPaths,
+  type SocketRequestPayload,
+  type SocketResponsePayload,
+} from "@patricktree/pi-vscode-terminal-notify.shared";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 import { execFile } from "node:child_process";
 
-const SOCKET_DIRECTORY = path.join(".pi", "pi-vscode-terminal-notify");
 const MAX_ANCESTOR_DEPTH = 15;
 const EXTENSION_LOG_PATH = path.join(
   os.homedir(),
@@ -13,21 +20,6 @@ const EXTENSION_LOG_PATH = path.join(
   "pi-vscode-terminal-notify",
   "pi-extension-log.txt",
 );
-
-type SocketRequestPayload =
-  | {
-      command: "query";
-      ancestorPids: number[];
-    }
-  | {
-      command: "notify";
-      ancestorPids: number[];
-    };
-
-type SocketResponsePayload = {
-  windowFocused: boolean;
-  piTerminalActive: boolean;
-};
 
 export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
   assertDarwin();
@@ -64,7 +56,7 @@ async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
 }
 
 async function isPiTerminalFocused(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths();
+  const socketPaths = await listSocketPaths(log);
   const responses = await Promise.all(
     socketPaths.map((socketPath) => querySocket(socketPath, ancestorPids)),
   );
@@ -82,7 +74,7 @@ async function isPiTerminalFocused(ancestorPids: number[]) {
 }
 
 async function sendNotification(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths();
+  const socketPaths = await listSocketPaths(log);
 
   log("Preparing to send notification", { socketCount: socketPaths.length });
 
@@ -94,21 +86,6 @@ async function sendNotification(ancestorPids: number[]) {
   log("Sending VS Code notification command");
   await Promise.all(socketPaths.map((socketPath) => notifySocket(socketPath, ancestorPids)));
   log("Notification command sent");
-}
-
-async function listSocketPaths() {
-  const socketDirectory = getSocketDirectory();
-  try {
-    const entries = await fs.promises.readdir(socketDirectory);
-    const paths = entries
-      .filter((entry) => entry.endsWith(".sock"))
-      .map((entry) => path.join(socketDirectory, entry));
-    log("Listed socket paths", { count: paths.length, paths });
-    return paths;
-  } catch (error) {
-    log("Failed to list socket paths", { error: formatError(error) });
-    return [];
-  }
 }
 
 async function querySocket(socketPath: string, ancestorPids: number[]) {
@@ -205,16 +182,6 @@ async function getParentPid(pid: number) {
   }
 }
 
-function getSocketDirectory() {
-  return path.join(os.homedir(), SOCKET_DIRECTORY);
-}
-
-function assertDarwin() {
-  if (process.platform !== "darwin") {
-    throw new Error("Pi VS Code terminal notifications are only supported on MacOS");
-  }
-}
-
 function execFileAsync(command: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     execFile(command, args, (error, stdout, stderr) => {
@@ -226,17 +193,6 @@ function execFileAsync(command: string, args: string[]) {
       resolve({ stdout, stderr });
     });
   });
-}
-
-function isSocketPayload(value: unknown): value is SocketResponsePayload {
-  if (typeof value !== "object" || value === null) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record["windowFocused"] === "boolean" && typeof record["piTerminalActive"] === "boolean"
-  );
 }
 
 function log(message: string, data?: unknown) {
@@ -255,20 +211,4 @@ function log(message: string, data?: unknown) {
       process.stderr.write(`${line.trimEnd()} ${errorSuffix}\n`);
     }
   })();
-}
-
-function formatError(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return "Unknown error";
-  }
 }
