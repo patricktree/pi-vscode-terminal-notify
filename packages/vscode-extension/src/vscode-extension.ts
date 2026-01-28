@@ -13,11 +13,9 @@ import {
 import net from "node:net";
 import fs from "node:fs";
 import path from "node:path";
-import { execFile } from "node:child_process";
 
 const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
 const NOTIFICATION_TITLE = "Pi is waiting for input";
-const VSCODE_APP_NAME = "Visual Studio Code";
 const VSCODE_BUNDLE_ID = "com.microsoft.VSCode";
 
 let server: net.Server | undefined;
@@ -362,7 +360,9 @@ function getWorkspaceLaunchPath() {
 async function bringWindowToForeground(workspacePath: string) {
   log("Bringing VS Code window to foreground", { workspacePath });
   try {
-    await execFileAsync("open", ["-a", VSCODE_APP_NAME, workspacePath]);
+    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(workspacePath), {
+      forceReuseWindow: true,
+    });
   } catch (error) {
     log("Failed to bring VS Code window to foreground", { error: formatError(error) });
   }
@@ -401,20 +401,6 @@ function getSocketPath() {
   const socketPath = path.join(getSocketDirectory(), `${SOCKET_PREFIX}${process.pid}.sock`);
   log("Computed socket path", { socketPath });
   return socketPath;
-}
-
-function execFileAsync(command: string, args: string[]) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(command, args, (error, stdout, stderr) => {
-      if (error) {
-        const execError = error instanceof Error ? error : new Error(formatError(error));
-        reject(execError);
-        return;
-      }
-
-      resolve({ stdout, stderr });
-    });
-  });
 }
 
 async function ensureSocketDirectory(socketPath: string) {
