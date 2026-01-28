@@ -23,6 +23,18 @@ pnpm --filter pi-vscode-terminal-notify.vscode-extension run build
 
 Load the extension in VS Code (Command Palette → "Developer: Install Extension from Location...") or package it using `vsce`.
 
+### Notification Permissions
+
+The VS Code extension uses a vendored `terminal-notifier` app bundle to display macOS notifications. On first use, you must grant notification permissions:
+
+1. Open **System Settings → Notifications**
+2. Find **"terminal-notifier"** with the Pi logo in the list
+3. Enable **"Allow Notifications"**
+
+Without this permission, notifications will silently fail to appear.
+
+### Socket Server
+
 The extension listens on per-window sockets under:
 
 ```txt

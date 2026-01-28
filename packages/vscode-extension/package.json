@@ -12,7 +12,8 @@
   "files": [
     "dist/**",
     "!dist/**/*.d.ts.map",
-    "assets/**"
+    "assets/**",
+    "vendor/**"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",
@@ -30,12 +31,10 @@
     "onUri"
   ],
   "dependencies": {
-    "@patricktree/pi-vscode-terminal-notify.shared": "workspace:*",
-    "node-notifier": "^10.0.1"
+    "@patricktree/pi-vscode-terminal-notify.shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@types/node-notifier": "^8.0.5",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",

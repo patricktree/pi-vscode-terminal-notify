@@ -1,10 +1,9 @@
 import * as vscode from "vscode";
-import { NotificationCenter } from "node-notifier";
+import { notify, type NotificationResponse } from "./terminal-notifier.js";
 import {
   assertDarwin,
   formatError,
   getSocketDirectory,
-  isRecord,
   listSocketPaths,
   VscodeTerminalNotifySocketProtoSchema,
   VscodeTerminalNotifySocketRequestSchema,
@@ -19,14 +18,13 @@ import { execFile } from "node:child_process";
 const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
 const NOTIFICATION_TITLE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
+const VSCODE_BUNDLE_ID = "com.microsoft.VSCode";
 
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
-let extensionPath: string | undefined;
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(_context: vscode.ExtensionContext) {
   assertDarwin();
-  extensionPath = context.extensionPath;
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
@@ -161,35 +159,29 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
   const terminalLine = `Terminal: ${terminal.name}`;
   const message = `${terminalLine}\n${workspaceLine}`;
 
-  const iconPath = extensionPath ? path.join(extensionPath, "assets", "logo.png") : undefined;
   log("Showing MacOS notification", {
     ancestorPids,
     workspacePath,
     terminalName: terminal.name,
-    iconPath,
   });
-  const notifier = new NotificationCenter({ withFallback: false });
-  notifier.notify(
+
+  notify(
     {
       title: NOTIFICATION_TITLE,
       message,
-      icon: iconPath,
-      contentImage: iconPath,
-      timeout: 30,
+      activate: VSCODE_BUNDLE_ID,
     },
-    (error: Error | null, response?: string, metadata?: unknown) => {
+    (error: Error | null, _response?: string, metadata?: NotificationResponse) => {
       if (error) {
         log("MacOS notification failed", { error: formatError(error) });
         return;
       }
 
-      if (
-        response === "activate" ||
-        (isNotificationMetadata(metadata) && metadata.activationType === "contentsClicked")
-      ) {
+      if (metadata?.activationType === "contentsClicked") {
         void handleFocusTerminalAction(ancestorPids);
       }
     },
+    log,
   );
 }
 
@@ -399,15 +391,6 @@ function log(message: string, data?: unknown) {
     outputChannel.appendLine(line);
   }
   console.log(line);
-}
-
-function isNotificationMetadata(value: unknown): value is { activationType?: string } {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  const activationType = value["activationType"];
-  return typeof activationType === "string";
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
