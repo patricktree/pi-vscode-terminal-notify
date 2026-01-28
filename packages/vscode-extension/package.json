@@ -11,7 +11,8 @@
   "main": "./dist/vscode-extension.js",
   "files": [
     "dist/**",
-    "!dist/**/*.d.ts.map"
+    "!dist/**/*.d.ts.map",
+    "assets/**"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",

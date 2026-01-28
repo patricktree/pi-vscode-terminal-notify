@@ -17,15 +17,16 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 
 const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
-const NOTIFICATION_TITLE = "Pi";
-const NOTIFICATION_MESSAGE = "Pi is waiting for input";
+const NOTIFICATION_TITLE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
 
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
+let extensionPath: string | undefined;
 
-export async function activate(_context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   assertDarwin();
+  extensionPath = context.extensionPath;
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
@@ -156,16 +157,23 @@ async function handleMaybeNotify(ancestorPids: number[]) {
 
 function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
   const workspacePath = getWorkspaceLaunchPath();
-  const workspaceTitle = workspacePath ? path.basename(workspacePath) : NOTIFICATION_TITLE;
   const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
   const terminalLine = `Terminal: ${terminal.name}`;
-  const message = `${NOTIFICATION_MESSAGE}\n${workspaceLine}\n${terminalLine}`;
+  const message = `${terminalLine}\n${workspaceLine}`;
 
-  log("Showing MacOS notification", { ancestorPids, workspacePath, terminalName: terminal.name });
+  const iconPath = extensionPath ? path.join(extensionPath, "assets", "logo.png") : undefined;
+  log("Showing MacOS notification", {
+    ancestorPids,
+    workspacePath,
+    terminalName: terminal.name,
+    iconPath,
+  });
   notifier.notify(
     {
-      title: workspaceTitle,
+      title: NOTIFICATION_TITLE,
       message,
+      icon: iconPath,
+      contentImage: iconPath,
       wait: true,
       timeout: 60,
     },
