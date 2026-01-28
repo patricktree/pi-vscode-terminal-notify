@@ -139,7 +139,7 @@ async function startServer() {
         }
         case "notify": {
           log("Handling notify command", { ancestorPids: socketPayload.ancestorPids });
-          showNotificationForAncestors(socketPayload.ancestorPids);
+          await showNotificationForAncestors(socketPayload.ancestorPids);
           socket.end();
           break;
         }
@@ -184,17 +184,27 @@ async function startServer() {
   });
 }
 
-function showNotificationForAncestors(ancestorPids: number[]) {
+async function showNotificationForAncestors(ancestorPids: number[]) {
   if (process.platform !== "darwin") {
     throw new Error("Notifications are only supported on MacOS");
   }
 
-  log("Showing MacOS notification", { ancestorPids });
+  const terminal = await findTerminalForAncestors(ancestorPids);
+  const workspacePath = terminal
+    ? getWorkspaceLaunchPath()
+    : await resolveOwningWorkspacePath(ancestorPids);
+  const workspaceTitle = workspacePath ? path.basename(workspacePath) : NOTIFICATION_TITLE;
+  const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
+  const terminalLine = `Terminal: ${terminal?.name ?? "Unknown"}`;
+  const message = `${NOTIFICATION_MESSAGE}\n${workspaceLine}\n${terminalLine}`;
+
+  log("Showing MacOS notification", { ancestorPids, workspacePath, terminalName: terminal?.name });
   notifier.notify(
     {
-      title: NOTIFICATION_TITLE,
-      message: NOTIFICATION_MESSAGE,
+      title: workspaceTitle,
+      message,
       wait: true,
+      timeout: 60,
     },
     (error: Error | null, response?: string, metadata?: unknown) => {
       if (error) {
