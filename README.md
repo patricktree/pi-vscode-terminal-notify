@@ -4,8 +4,8 @@ macOS-only. Extensions throw on non-darwin platforms.
 
 This repository contains three pieces:
 
-1. **VS Code extension** that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.
-2. **Pi extension** that queries the socket on `agent_end` and triggers notifications when Pi is not the active VS Code terminal.
+1. **VS Code extension** that listens on a Unix socket, determines terminal ownership, and shows macOS notifications when Pi is not the active terminal.
+2. **Pi extension** that sends `maybeNotify` to all VS Code sockets on `agent_end` with ancestor PIDs.
 3. **Shared package** with socket types + helpers used by both extensions.
 
 ## Shared Package
@@ -33,11 +33,8 @@ The extension listens on per-window sockets under:
 
 Each socket accepts newline-delimited JSON commands:
 
-- `query` → returns `{ windowFocused, piTerminalActive }` for the current VS Code window.
-- `notify` → shows a macOS notification with workspace + terminal details.
+- `maybeNotify` → fire-and-forget; VS Code extension checks if the terminal (identified by ancestor PIDs) belongs to this window and is unfocused, then shows a macOS notification if appropriate.
 - `locate` → returns `{ ownsTerminal, workspacePath }` for a given ancestor PID chain (used to focus the owning window).
-
-Notifications are macOS-only; other platforms will reject the `notify` command.
 
 ## Pi Extension
 
@@ -70,8 +67,8 @@ Restart Pi.
 When Pi finishes a prompt (`agent_end`), it:
 
 - Builds the ancestor PID chain (up to 15 levels).
-- Queries every VS Code socket for focus + active terminal status.
-- Sends a `notify` command to all sockets if none report an active Pi terminal.
+- Sends a `maybeNotify` command to all VS Code sockets with the ancestor PIDs.
+- Each VS Code extension instance determines if it owns the terminal and whether to show a notification.
 
 Clicking the notification focuses the owning VS Code window and terminal when possible.
 
