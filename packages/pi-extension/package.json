@@ -1,10 +1,9 @@
 {
-  "name": "@patricktree/pi-terminal-notify-extension",
+  "name": "@patricktree/pi-vscode-terminal-notify.pi-extension",
   "private": true,
   "type": "module",
   "files": [
-    "vscode-terminal-notify.ts",
-    "focus-terminal.mjs"
+    "pi-extension-vscode-terminal-notify.ts"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",

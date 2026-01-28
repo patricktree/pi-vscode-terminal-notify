@@ -6,8 +6,8 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
-const SOCKET_PREFIX = "vscode-terminal-notification-";
+const SOCKET_DIRECTORY = path.join(".pi", "pi-vscode-terminal-notify");
+const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
 const NOTIFICATION_TITLE = "Pi";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";

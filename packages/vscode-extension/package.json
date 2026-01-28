@@ -1,11 +1,12 @@
 {
-  "name": "@patricktree/vscode-terminal-notify-extension",
-  "displayName": "VS Code Terminal Notify Extension for Pi",
+  "name": "@patricktree/pi-vscode-terminal-notify.vscode-extension",
+  "displayName": "Extension for Pi Coding Agent Notifications",
   "version": "0.1.0",
-  "categories": [
-    "Other"
-  ],
-  "publisher": "pi",
+  "description": "A VSCode extension to show terminal notifications from Pi Coding Agent when it needs user input.",
+  "author": {
+    "name": "Patrick Kerschbaum"
+  },
+  "publisher": "patricktree",
   "type": "module",
   "main": "./dist/vscode-extension.js",
   "files": [
@@ -19,7 +20,8 @@
     "lint": "eslint --max-warnings 0 .",
     "lint:file": "eslint --max-warnings 0",
     "lint:file:fix": "eslint --max-warnings 0 --fix",
-    "lint:fix": "eslint --max-warnings 0 . --fix"
+    "lint:fix": "eslint --max-warnings 0 . --fix",
+    "vscode:prepublish": "pnpm run build"
   },
   "contributes": {},
   "activationEvents": [
@@ -30,8 +32,8 @@
     "node-notifier": "^10.0.1"
   },
   "devDependencies": {
-    "@types/node-notifier": "^8.0.5",
     "@types/node": "^22.10.5",
+    "@types/node-notifier": "^8.0.5",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",

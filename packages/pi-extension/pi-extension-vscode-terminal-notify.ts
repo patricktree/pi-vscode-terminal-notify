@@ -5,12 +5,12 @@ import path from "node:path";
 import fs from "node:fs";
 import { execFile } from "node:child_process";
 
-const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
+const SOCKET_DIRECTORY = path.join(".pi", "pi-vscode-terminal-notify");
 const MAX_ANCESTOR_DEPTH = 15;
 const EXTENSION_LOG_PATH = path.join(
   os.homedir(),
   ".pi",
-  "vscode-terminal-notification",
+  "pi-vscode-terminal-notify",
   "pi-extension-log.txt",
 );
 
