@@ -26,7 +26,11 @@
     "onStartupFinished",
     "onUri"
   ],
+  "dependencies": {
+    "node-notifier": "^10.0.1"
+  },
   "devDependencies": {
+    "@types/node-notifier": "^8.0.5",
     "@types/node": "^22.10.5",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",

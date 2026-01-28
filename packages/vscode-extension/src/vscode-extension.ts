@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import notifier from "node-notifier";
 import net from "node:net";
 import fs from "node:fs";
 import os from "node:os";
@@ -7,8 +8,8 @@ import { execFile } from "node:child_process";
 
 const SOCKET_DIRECTORY = path.join(".pi", "vscode-terminal-notification");
 const SOCKET_PREFIX = "vscode-terminal-notification-";
+const NOTIFICATION_TITLE = "Pi";
 const NOTIFICATION_MESSAGE = "Pi is waiting for input";
-const NOTIFICATION_ACTION = "Focus Terminal";
 const VSCODE_APP_NAME = "Visual Studio Code";
 
 let activeTerminalProcessId: number | undefined;
@@ -138,7 +139,7 @@ async function startServer() {
         }
         case "notify": {
           log("Handling notify command", { ancestorPids: socketPayload.ancestorPids });
-          await showNotificationForAncestors(socketPayload.ancestorPids);
+          showNotificationForAncestors(socketPayload.ancestorPids);
           socket.end();
           break;
         }
@@ -183,16 +184,32 @@ async function startServer() {
   });
 }
 
-async function showNotificationForAncestors(ancestorPids: number[]) {
-  log("Showing VS Code notification", { ancestorPids });
-  const selection = await vscode.window.showInformationMessage(
-    NOTIFICATION_MESSAGE,
-    NOTIFICATION_ACTION,
-  );
-
-  if (selection === NOTIFICATION_ACTION) {
-    await handleFocusTerminalAction(ancestorPids);
+function showNotificationForAncestors(ancestorPids: number[]) {
+  if (process.platform !== "darwin") {
+    throw new Error("Notifications are only supported on MacOS");
   }
+
+  log("Showing MacOS notification", { ancestorPids });
+  notifier.notify(
+    {
+      title: NOTIFICATION_TITLE,
+      message: NOTIFICATION_MESSAGE,
+      wait: true,
+    },
+    (error: Error | null, response?: string, metadata?: unknown) => {
+      if (error) {
+        log("MacOS notification failed", { error: formatError(error) });
+        return;
+      }
+
+      if (
+        response === "activate" ||
+        (isNotificationMetadata(metadata) && metadata.activationType === "contentsClicked")
+      ) {
+        void handleFocusTerminalAction(ancestorPids);
+      }
+    },
+  );
 }
 
 async function handleFocusTerminalAction(ancestorPids: number[]) {
@@ -464,6 +481,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isNotificationMetadata(value: unknown): value is { activationType?: string } {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const activationType = value["activationType"];
+  return typeof activationType === "string";
+}
+
 function isSocketRequestPayload(value: Record<string, unknown>): value is SocketRequestPayload {
   const command = value["command"];
   const ancestorPids = value["ancestorPids"];
@@ -493,10 +519,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 function getSocketPath() {
-  const socketPath = path.join(
-    getSocketDirectory(),
-    `${SOCKET_PREFIX}${process.pid}.sock`,
-  );
+  const socketPath = path.join(getSocketDirectory(), `${SOCKET_PREFIX}${process.pid}.sock`);
   log("Computed socket path", { socketPath });
   return socketPath;
 }
