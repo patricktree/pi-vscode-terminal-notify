@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import notifier from "node-notifier";
+import { NotificationCenter } from "node-notifier";
 import {
   assertDarwin,
   formatError,
@@ -168,14 +168,14 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
     terminalName: terminal.name,
     iconPath,
   });
+  const notifier = new NotificationCenter({ withFallback: false });
   notifier.notify(
     {
       title: NOTIFICATION_TITLE,
       message,
       icon: iconPath,
       contentImage: iconPath,
-      wait: true,
-      timeout: 60,
+      timeout: 30,
     },
     (error: Error | null, response?: string, metadata?: unknown) => {
       if (error) {
