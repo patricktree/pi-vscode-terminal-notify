@@ -172,15 +172,18 @@ async function startServer() {
 
 async function showNotificationForAncestors(ancestorPids: number[]) {
   const terminal = await findTerminalForAncestors(ancestorPids);
-  const workspacePath = terminal
-    ? getWorkspaceLaunchPath()
-    : await resolveOwningWorkspacePath(ancestorPids);
+  if (!terminal) {
+    log("Skipping notification - terminal not owned by this window", { ancestorPids });
+    return;
+  }
+
+  const workspacePath = getWorkspaceLaunchPath();
   const workspaceTitle = workspacePath ? path.basename(workspacePath) : NOTIFICATION_TITLE;
   const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
-  const terminalLine = `Terminal: ${terminal?.name ?? "Unknown"}`;
+  const terminalLine = `Terminal: ${terminal.name}`;
   const message = `${NOTIFICATION_MESSAGE}\n${workspaceLine}\n${terminalLine}`;
 
-  log("Showing MacOS notification", { ancestorPids, workspacePath, terminalName: terminal?.name });
+  log("Showing MacOS notification", { ancestorPids, workspacePath, terminalName: terminal.name });
   notifier.notify(
     {
       title: workspaceTitle,
