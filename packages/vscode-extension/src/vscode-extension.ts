@@ -139,6 +139,12 @@ async function handleMaybeNotify(ancestorPids: number[]) {
     return;
   }
 
+  const terminalPid = await terminal.processId;
+  if (!terminalPid) {
+    log("Skipping notification - could not resolve terminal PID");
+    return;
+  }
+
   const windowFocused = vscode.window.state.focused;
   const activeTerminal = vscode.window.activeTerminal;
   const piTerminalActive = activeTerminal === terminal;
@@ -150,10 +156,10 @@ async function handleMaybeNotify(ancestorPids: number[]) {
     return;
   }
 
-  showNotification(ancestorPids, terminal);
+  showNotification(ancestorPids, terminal, terminalPid);
 }
 
-function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
+function showNotification(ancestorPids: number[], terminal: vscode.Terminal, terminalPid: number) {
   const workspacePath = getWorkspaceLaunchPath();
   const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
   const terminalLine = `Terminal: ${terminal.name}`;
@@ -163,6 +169,7 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
     ancestorPids,
     workspacePath,
     terminalName: terminal.name,
+    terminalPid,
   });
 
   notify(
@@ -170,6 +177,7 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal) {
       title: NOTIFICATION_TITLE,
       message,
       activate: VSCODE_BUNDLE_ID,
+      group: `pi-terminal-${terminalPid}`,
     },
     (error: Error | null, _response?: string, metadata?: NotificationResponse) => {
       if (error) {
