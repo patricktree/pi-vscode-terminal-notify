@@ -18,7 +18,6 @@ import { execFile } from "node:child_process";
 const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
 const NOTIFICATION_TITLE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
-const VSCODE_BUNDLE_ID = "com.microsoft.VSCode";
 
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
@@ -205,7 +204,6 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal, ter
     {
       title: NOTIFICATION_TITLE,
       message,
-      activate: VSCODE_BUNDLE_ID,
       group: `pi-terminal-${terminalPid}`,
     },
     (error: Error | null, _response?: string, metadata?: NotificationResponse) => {
