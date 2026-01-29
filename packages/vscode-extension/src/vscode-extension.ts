@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { notify, type NotificationResponse } from "./terminal-notifier.js";
+import { notify, removeNotification, type NotificationResponse } from "./terminal-notifier.js";
 import {
   assertDarwin,
   formatError,
@@ -23,13 +23,26 @@ const VSCODE_BUNDLE_ID = "com.microsoft.VSCode";
 let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
-export async function activate(_context: vscode.ExtensionContext) {
+/** Tracks terminal PIDs with active (pending) notifications */
+const activeNotificationPids = new Set<number>();
+
+export async function activate(context: vscode.ExtensionContext) {
   assertDarwin();
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
 
   await startServer();
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTerminal(() => {
+      void clearNotificationIfTerminalFocused();
+    }),
+    vscode.window.onDidChangeWindowState(() => {
+      void clearNotificationIfTerminalFocused();
+    }),
+  );
+
   log("Extension activated");
 }
 
@@ -159,6 +172,20 @@ async function handleMaybeNotify(ancestorPids: number[]) {
   showNotification(ancestorPids, terminal, terminalPid);
 }
 
+async function clearNotificationIfTerminalFocused() {
+  const terminal = vscode.window.activeTerminal;
+  if (!terminal || !vscode.window.state.focused) {
+    return;
+  }
+
+  const pid = await terminal.processId;
+  if (pid && activeNotificationPids.has(pid)) {
+    log("Clearing notification - terminal focused", { pid });
+    activeNotificationPids.delete(pid);
+    removeNotification(`pi-terminal-${pid}`, log);
+  }
+}
+
 function showNotification(ancestorPids: number[], terminal: vscode.Terminal, terminalPid: number) {
   const workspacePath = getWorkspaceLaunchPath();
   const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
@@ -172,6 +199,8 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal, ter
     terminalPid,
   });
 
+  activeNotificationPids.add(terminalPid);
+
   notify(
     {
       title: NOTIFICATION_TITLE,
@@ -180,6 +209,9 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal, ter
       group: `pi-terminal-${terminalPid}`,
     },
     (error: Error | null, _response?: string, metadata?: NotificationResponse) => {
+      // Clear from active set - notification was interacted with or dismissed
+      activeNotificationPids.delete(terminalPid);
+
       if (error) {
         log("MacOS notification failed", { error: formatError(error) });
         return;

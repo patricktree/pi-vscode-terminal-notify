@@ -2,7 +2,7 @@
  * Lightweight wrapper around the vendored terminal-notifier V3 binary.
  * Replaces node-notifier for macOS notifications.
  */
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -174,4 +174,42 @@ function parseResponse(stdout: string): NotificationResponse {
  */
 export function getNotifierPath(): string {
   return NOTIFIER_PATH;
+}
+
+/**
+ * Remove a notification by group ID.
+ */
+export function removeNotification(group: string, log?: LogFunction): void {
+  log?.("Removing notification by group", { group, path: NOTIFIER_PATH });
+
+  const child = spawn(NOTIFIER_PATH, ["--debug", "-remove", group], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let stdout = "";
+  let stderr = "";
+
+  child.stdout.on("data", (data: Buffer) => {
+    stdout += data.toString();
+    log?.("Remove stdout chunk", { data: data.toString().trim() });
+  });
+
+  child.stderr.on("data", (data: Buffer) => {
+    stderr += data.toString();
+    log?.("Remove stderr chunk", { data: data.toString().trim() });
+  });
+
+  child.on("error", (err) => {
+    log?.("Remove process error", { group, error: err.message });
+  });
+
+  child.on("close", (code, signal) => {
+    log?.("Remove process closed", { group, code, signal, stdout: stdout.trim(), stderr: stderr.trim() });
+  });
+
+  child.on("exit", (code, signal) => {
+    log?.("Remove process exit", { group, code, signal });
+  });
+
+  log?.("Remove process spawned", { pid: child.pid });
 }
