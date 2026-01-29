@@ -15,7 +15,7 @@ const NOTIFIER_PATH = path.join(
   "pi-terminal-notifier.app",
   "Contents",
   "MacOS",
-  "terminal-notifier",
+  "pi-terminal-notifier",
 );
 
 export type NotificationOptions = {
