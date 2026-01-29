@@ -19,11 +19,11 @@
     <key>CFBundleShortVersionString</key>
     <string>3.0.0</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>2</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2024 terminal-notifier. All rights reserved.</string>
+    <string>Copyright © 2024 pi-terminal-notifier. All rights reserved.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>LSUIElement</key>
