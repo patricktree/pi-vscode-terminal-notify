@@ -219,15 +219,6 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal, ter
 
       if (metadata?.activationType === "contentsClicked") {
         void handleFocusTerminalAction(ancestorPids);
-      } else if (metadata?.activationType === "closed" || metadata?.activationType === "timeout") {
-        /*
-         * When macOS times out the notification banner (~30s), terminal-notifier exits.
-         * The notification may still linger in notification center; clicking it later
-         * re-launches the app without arguments, causing an empty notification.
-         * Remove it explicitly to prevent stale clicks.
-         */
-        log("Removing timed-out notification from notification center", { groupId });
-        removeNotification(groupId, log);
       }
     },
     log,
