@@ -1,5 +1,9 @@
 import * as vscode from "vscode";
-import { notify, removeNotification, type NotificationResponse } from "./terminal-notifier.js";
+import {
+  notify,
+  removeNotification,
+  type NotificationResponse,
+} from "@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier";
 import {
   assertDarwin,
   formatError,

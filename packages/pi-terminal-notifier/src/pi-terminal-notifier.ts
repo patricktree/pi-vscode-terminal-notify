@@ -1,5 +1,5 @@
 /**
- * Lightweight wrapper around the vendored terminal-notifier V3 binary.
+ * Lightweight wrapper around the vendored pi-terminal-notifier V3 binary.
  * Replaces node-notifier for macOS notifications.
  */
 import { execFile, spawn } from "node:child_process";
@@ -47,7 +47,7 @@ export type NotificationCallback = (
 export type LogFunction = (message: string, data?: unknown) => void;
 
 /**
- * Send a macOS notification using the vendored terminal-notifier.
+ * Send a macOS notification using the vendored pi-terminal-notifier.
  */
 export function notify(
   options: NotificationOptions,
@@ -56,16 +56,16 @@ export function notify(
 ): void {
   const args = buildArgs(options);
 
-  log?.("Invoking terminal-notifier", { path: NOTIFIER_PATH, args });
+  log?.("Invoking pi-terminal-notifier", { path: NOTIFIER_PATH, args });
 
   execFile(NOTIFIER_PATH, args, (error, stdout, stderr) => {
     if (error) {
-      log?.("terminal-notifier failed", { error: error.message, stderr });
+      log?.("pi-terminal-notifier failed", { error: error.message, stderr });
       callback?.(error);
       return;
     }
 
-    log?.("terminal-notifier completed", { stdout: stdout.trim(), stderr });
+    log?.("pi-terminal-notifier completed", { stdout: stdout.trim(), stderr });
 
     const response = parseResponse(stdout.trim());
     log?.("Parsed notification response", response);
@@ -121,7 +121,7 @@ function buildArgs(options: NotificationOptions): string[] {
 
   if (options.timeout !== undefined) {
     /*
-     * terminal-notifier V3 doesn't have a direct timeout flag.
+     * pi-terminal-notifier V3 doesn't have a direct timeout flag.
      * The notification will persist until user interaction or system dismissal.
      * This is left here for API compatibility.
      */
@@ -136,7 +136,7 @@ function buildArgs(options: NotificationOptions): string[] {
 
 function parseResponse(stdout: string): NotificationResponse {
   /*
-   * terminal-notifier V3 output format (patched):
+   * pi-terminal-notifier V3 output format (patched):
    * - Empty or no output: notification was dismissed/timed out
    * - "CLICKED": notification body was clicked
    * - "ACTION:identifier": action button was clicked
@@ -169,7 +169,7 @@ function parseResponse(stdout: string): NotificationResponse {
 }
 
 /**
- * Get the path to the vendored terminal-notifier binary.
+ * Get the path to the vendored pi-terminal-notifier binary.
  * Useful for debugging or direct invocation.
  */
 export function getNotifierPath(): string {

@@ -1,18 +1,14 @@
 {
-  "name": "@patricktree/pi-vscode-terminal-notify.vscode-extension",
-  "displayName": "Extension for Pi Coding Agent Notifications",
-  "version": "0.1.0",
-  "description": "A VSCode extension to show terminal notifications from Pi Coding Agent when it needs user input.",
-  "author": {
-    "name": "Patrick Kerschbaum"
-  },
-  "publisher": "patricktree",
+  "name": "@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier",
+  "private": true,
   "type": "module",
-  "main": "./dist/vscode-extension.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "files": [
     "dist/**",
     "!dist/**/*.d.ts.map",
-    "assets/**"
+    "vendor/**"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",
@@ -21,21 +17,10 @@
     "lint": "eslint --max-warnings 0 .",
     "lint:file": "eslint --max-warnings 0",
     "lint:file:fix": "eslint --max-warnings 0 --fix",
-    "lint:fix": "eslint --max-warnings 0 . --fix",
-    "vscode:prepublish": "pnpm run build"
-  },
-  "contributes": {},
-  "activationEvents": [
-    "onStartupFinished",
-    "onUri"
-  ],
-  "dependencies": {
-    "@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier": "workspace:*",
-    "@patricktree/pi-vscode-terminal-notify.shared": "workspace:*"
+    "lint:fix": "eslint --max-warnings 0 . --fix"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",
     "eslint": "^8.57.1",
@@ -52,7 +37,6 @@
   },
   "packageManager": "pnpm@10.28.2",
   "engines": {
-    "pnpm": "10.28.2",
-    "vscode": "^1.85.0"
+    "pnpm": "10.28.2"
   }
 }
