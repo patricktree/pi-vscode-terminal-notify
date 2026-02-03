@@ -166,6 +166,58 @@ importers:
 
   packages/vscode-extension:
     dependencies:
+      '@patricktree/pi-vscode-terminal-notify.vscode-extension-core':
+        specifier: workspace:*
+        version: link:../vscode-extension-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.19.7
+      '@types/vscode':
+        specifier: ^1.93.0
+        version: 1.108.1
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.51.0
+        version: 8.54.0(@typescript-eslint/parser@8.54.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.51.0
+        version: 8.54.0(eslint@8.57.1)(typescript@5.9.3)
+      eslint:
+        specifier: ^8.57.1
+        version: 8.57.1
+      eslint-plugin-eslint-comments:
+        specifier: ^3.2.0
+        version: 3.2.0(eslint@8.57.1)
+      eslint-plugin-import:
+        specifier: ^2.30.0
+        version: 2.32.0(@typescript-eslint/parser@8.54.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)
+      eslint-plugin-jsdoc:
+        specifier: ^50.2.2
+        version: 50.8.0(eslint@8.57.1)
+      eslint-plugin-n:
+        specifier: ^17.23.1
+        version: 17.23.2(eslint@8.57.1)(typescript@5.9.3)
+      eslint-plugin-only-warn:
+        specifier: ^1.1.0
+        version: 1.1.0
+      eslint-plugin-regexp:
+        specifier: ^2.6.0
+        version: 2.10.0(eslint@8.57.1)
+      eslint-plugin-unicorn:
+        specifier: ^55.0.0
+        version: 55.0.0(eslint@8.57.1)
+      prettier:
+        specifier: ^3.3.3
+        version: 3.8.1
+      prettier-plugin-packagejson:
+        specifier: ^2.5.2
+        version: 2.5.22(prettier@3.8.1)
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+
+  packages/vscode-extension-core:
+    dependencies:
       '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier':
         specifier: workspace:*
         version: link:../pi-terminal-notifier
