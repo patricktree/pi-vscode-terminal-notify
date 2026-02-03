@@ -1,9 +1,20 @@
 {
   "name": "@patricktree/pi-vscode-terminal-notify.pi-extension",
-  "private": true,
+  "version": "0.1.0",
   "keywords": [
     "pi-package"
   ],
+  "bugs": {
+    "url": "https://github.com/patricktree/pi-vscode-terminal-notify/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/patricktree/pi-vscode-terminal-notify.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Patrick Kerschbaum"
+  },
   "type": "module",
   "files": [
     "pi-extension-vscode-terminal-notify.ts",

@@ -14,3 +14,7 @@ Run the following in the repo root before finishing changes:
 pnpm -r run build
 pnpm -r run lint:fix
 ```
+
+## Publishing
+
+- Add a Changeset (`pnpm exec changeset`) for user-facing package changes; omit for tooling-only tweaks unless publishing impact.

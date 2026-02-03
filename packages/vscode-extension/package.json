@@ -20,7 +20,7 @@
     "type": "git",
     "url": "https://github.com/patricktree/pi-vscode-terminal-notify.git"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": {
     "name": "Patrick Kerschbaum"
   },
@@ -48,8 +48,8 @@
     "onUri"
   ],
   "dependencies": {
-    "@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier": "file:../pi-terminal-notifier",
-    "@patricktree/pi-vscode-terminal-notify.shared": "file:../shared"
+    "@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier": "workspace:*",
+    "@patricktree/pi-vscode-terminal-notify.shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

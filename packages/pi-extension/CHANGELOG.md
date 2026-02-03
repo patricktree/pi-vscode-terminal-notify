@@ -1,4 +1,4 @@
-# pi-vscode-terminal-notify
+# @patricktree/pi-vscode-terminal-notify.pi-extension
 
 ## 0.1.0
 
@@ -9,5 +9,4 @@
 ### Patch Changes
 
 - Updated dependencies
-  - @patricktree/pi-vscode-terminal-notify.pi-terminal-notifier@0.1.0
   - @patricktree/pi-vscode-terminal-notify.shared@0.1.0

@@ -1,0 +1,10 @@
+{
+  "name": "pi-vscode-terminal-notify-monorepo-root",
+  "private": true,
+  "dependencies": {
+    "@changesets/cli": "^2.29.8"
+  },
+  "devDependencies": {
+    "prettier-plugin-packagejson": "^2.5.22"
+  }
+}
