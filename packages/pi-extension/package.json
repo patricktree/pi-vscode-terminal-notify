@@ -6,7 +6,9 @@
   ],
   "type": "module",
   "files": [
-    "pi-extension-vscode-terminal-notify.ts"
+    "pi-extension-vscode-terminal-notify.ts",
+    "NOTICE",
+    "licenses/**"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",
