@@ -18,7 +18,7 @@ Location: `packages/vscode-extension/`
 
 ```bash
 pnpm install
-pnpm --filter pi-vscode-terminal-notify.vscode-extension run build
+pnpm --filter pi-vscode-terminal-notify run build
 ```
 
 Load the extension in VS Code (Command Palette → "Developer: Install Extension from Location...") or package it using `vsce`.

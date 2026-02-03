@@ -157,10 +157,10 @@ importers:
   packages/vscode-extension:
     dependencies:
       '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier':
-        specifier: workspace:*
+        specifier: file:../pi-terminal-notifier
         version: link:../pi-terminal-notifier
       '@patricktree/pi-vscode-terminal-notify.shared':
-        specifier: workspace:*
+        specifier: file:../shared
         version: link:../shared
     devDependencies:
       '@types/node':
