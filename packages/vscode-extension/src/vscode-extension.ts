@@ -7,37 +7,138 @@ import {
 import {
   assertDarwin,
   formatError,
-  getSocketDirectory,
-  listSocketPaths,
-  VscodeTerminalNotifySocketProtoSchema,
-  VscodeTerminalNotifySocketRequestSchema,
-  type VscodeTerminalNotifySocketProto,
-  type VscodeTerminalNotifySocketRequest,
 } from "@patricktree/pi-vscode-terminal-notify.shared";
-import net from "node:net";
-import fs from "node:fs";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const SOCKET_PREFIX = "pi-vscode-terminal-notify-";
 const NOTIFICATION_TITLE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
 
-let server: net.Server | undefined;
 let outputChannel: vscode.OutputChannel | undefined;
 
 /** Tracks terminal PIDs with active (pending) notifications */
 const activeNotificationPids = new Set<number>();
+const terminalPidMap = new Map<vscode.Terminal, number>();
 
-export async function activate(context: vscode.ExtensionContext) {
+type ParsedNotification = { title?: string; body: string };
+
+class OscParser {
+  private buffer = "";
+  private readonly onNotify: (n: ParsedNotification) => void;
+
+  constructor(onNotify: (n: ParsedNotification) => void) {
+    this.onNotify = onNotify;
+  }
+
+  public feed(chunk: string) {
+    this.buffer += chunk;
+    if (this.buffer.length > 256 * 1024) {
+      this.buffer = this.buffer.slice(-128 * 1024);
+    }
+
+    this.unwrapTmuxPassthrough();
+
+    const ESC = "\u001B";
+    const BEL = "\u0007";
+    const OSC_PREFIX = `${ESC  }]`;
+    const ST = `${ESC  }\\`;
+
+    while (true) {
+      const start = this.buffer.indexOf(OSC_PREFIX);
+      if (start === -1) {
+        if (this.buffer.length > 4096) {
+          this.buffer = this.buffer.slice(-4096);
+        }
+        return;
+      }
+
+      const afterStart = start + OSC_PREFIX.length;
+      const endBel = this.buffer.indexOf(BEL, afterStart);
+      const endSt = this.buffer.indexOf(ST, afterStart);
+
+      let end = -1;
+      let consume = 0;
+      if (endBel !== -1 && (endSt === -1 || endBel < endSt)) {
+        end = endBel;
+        consume = 1;
+      } else if (endSt !== -1) {
+        end = endSt;
+        consume = 2;
+      } else {
+        if (start > 0) {
+          this.buffer = this.buffer.slice(start);
+        }
+        return;
+      }
+
+      const content = this.buffer.slice(afterStart, end);
+      this.buffer = this.buffer.slice(end + consume);
+
+      this.tryParseOsc(content);
+    }
+  }
+
+  private tryParseOsc(content: string) {
+    const s = content.trim();
+    if (!s.startsWith("777;")) {
+      return;
+    }
+
+    const parts = s.split(";");
+    const command = parts[1];
+    if (command?.toLowerCase() !== "notify") {
+      return;
+    }
+
+    const title = parts[2] ?? "Terminal";
+    const body = parts.length >= 4 ? parts.slice(3).join(";") : "";
+    if (body.length > 0 || title.length > 0) {
+      this.onNotify({ title, body });
+    }
+  }
+
+  private unwrapTmuxPassthrough() {
+    const ESC = "\u001B";
+    const DCS_TMUX = `${ESC}Ptmux;`;
+    const ST = `${ESC}\\`;
+
+    while (true) {
+      const i = this.buffer.indexOf(DCS_TMUX);
+      if (i === -1) {
+        return;
+      }
+
+      const after = i + DCS_TMUX.length;
+      const end = this.buffer.indexOf(ST, after);
+      if (end === -1) {
+        if (i > 0) {
+          this.buffer = this.buffer.slice(i);
+        }
+        return;
+      }
+
+      const inner = this.buffer
+        .slice(after, end)
+        .split("\u001B\u001B")
+        .join("\u001B");
+      this.buffer = this.buffer.slice(0, i) + inner + this.buffer.slice(end + ST.length);
+    }
+  }
+}
+
+export function activate(context: vscode.ExtensionContext) {
   assertDarwin();
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
 
-  await startServer();
-
   context.subscriptions.push(
+    vscode.window.onDidStartTerminalShellExecution((event) => {
+      void handleShellExecution(event);
+    }),
+    vscode.window.onDidCloseTerminal((terminal) => {
+      cleanupTerminalState(terminal);
+    }),
     vscode.window.onDidChangeActiveTerminal(() => {
       void clearNotificationIfTerminalFocused();
     }),
@@ -49,23 +150,9 @@ export async function activate(context: vscode.ExtensionContext) {
   log("Extension activated");
 }
 
-export async function deactivate() {
+export function deactivate() {
   log("Extension deactivating");
-  if (server) {
-    server.close();
-    server = undefined;
-    log("Socket server closed");
-  }
-
-  const socketPath = getSocketPath();
-  try {
-    await fs.promises.unlink(socketPath);
-    log("Removed socket file", { socketPath });
-  } catch (error) {
-    if (!(isNodeError(error) && error.code === "ENOENT")) {
-      log("Failed to clean up socket", { error: formatError(error) });
-    }
-  }
+  terminalPidMap.clear();
 
   if (outputChannel) {
     outputChannel.dispose();
@@ -74,93 +161,42 @@ export async function deactivate() {
   }
 }
 
-async function startServer() {
-  log("Starting Pi socket server");
-  const socketPath = getSocketPath();
-  await ensureSocketDirectory(socketPath);
-  await removeStaleSocket(socketPath);
+async function handleShellExecution(event: vscode.TerminalShellExecutionStartEvent) {
+  const { terminal, execution } = event;
+  const parser = new OscParser((notification) => {
+    void handleOscNotification(terminal, notification);
+  });
 
-  server = net.createServer((socket) => {
-    let buffer = "";
-    log("Socket client connected");
-
-    const handleSocketData = async (chunk: Buffer) => {
-      log("Socket data received", { bytes: chunk.length });
-      buffer += chunk.toString();
-      const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) {
-        log("Waiting for complete socket payload", {
-          bufferedBytes: buffer.length,
-        });
-        return;
+  const stream = execution.read() as AsyncIterable<string | Uint8Array>;
+  try {
+    for await (const data of stream) {
+      if (typeof data === "string") {
+        parser.feed(data);
+        continue;
       }
 
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
-
-      const socketPayload = parseSocketPayload(line);
-
-      switch (socketPayload.command) {
-        case "maybeNotify": {
-          log("Handling maybeNotify command", { ancestorPids: socketPayload.ancestorPids });
-          await handleMaybeNotify(socketPayload.ancestorPids);
-          socket.end();
-          break;
-        }
-        case "locate": {
-          log("Handling locate command", { ancestorPids: socketPayload.ancestorPids });
-          const terminal = await findTerminalForAncestors(socketPayload.ancestorPids);
-          const response: VscodeTerminalNotifySocketProto["locate"]["response"] = {
-            ownsTerminal: Boolean(terminal),
-            workspacePath: terminal ? getWorkspaceLaunchPath() : null,
-          };
-          log("Responding to locate request", response);
-          socket.write(`${JSON.stringify(response)}\n`);
-          socket.end();
-          break;
-        }
-      }
-    };
-
-    socket.on("data", (chunk) => {
-      void handleSocketData(chunk);
-    });
-
-    socket.on("error", (error) => {
-      log("Socket error", { error: formatError(error) });
-    });
-
-    socket.on("close", () => {
-      log("Socket client disconnected");
-    });
-  });
-
-  server.on("error", (error) => {
-    log("VS Code socket server error", { error: formatError(error) });
-  });
-
-  server.on("close", () => {
-    log("Pi socket server stopped");
-  });
-
-  server.listen(socketPath, () => {
-    log("Pi socket server listening", { socketPath });
-  });
+      parser.feed(Buffer.from(data).toString());
+    }
+  } catch (error) {
+    log("Terminal data stream ended with error", { error: formatError(error) });
+  }
 }
 
-async function handleMaybeNotify(ancestorPids: number[]) {
-  const terminal = await findTerminalForAncestors(ancestorPids);
-  if (!terminal) {
-    log("Skipping notification - terminal not owned by this window", { ancestorPids });
-    return;
-  }
-
-  const terminalPid = await terminal.processId;
+async function handleOscNotification(terminal: vscode.Terminal, notification: ParsedNotification) {
+  const terminalPid = await resolveTerminalPid(terminal);
   if (!terminalPid) {
     log("Skipping notification - could not resolve terminal PID");
     return;
   }
 
+  if (shouldSkipNotification(terminal)) {
+    return;
+  }
+
+  showNotification(terminal, terminalPid, notification);
+}
+
+function shouldSkipNotification(terminal: vscode.Terminal) {
   const windowFocused = vscode.window.state.focused;
   const activeTerminal = vscode.window.activeTerminal;
   const piTerminalActive = activeTerminal === terminal;
@@ -169,10 +205,10 @@ async function handleMaybeNotify(ancestorPids: number[]) {
 
   if (windowFocused && piTerminalActive) {
     log("Skipping notification - Pi terminal is focused");
-    return;
+    return true;
   }
 
-  showNotification(ancestorPids, terminal, terminalPid);
+  return false;
 }
 
 async function clearNotificationIfTerminalFocused() {
@@ -181,7 +217,7 @@ async function clearNotificationIfTerminalFocused() {
     return;
   }
 
-  const pid = await terminal.processId;
+  const pid = await resolveTerminalPid(terminal);
   if (pid && activeNotificationPids.has(pid)) {
     log("Clearing notification - terminal focused", { pid });
     activeNotificationPids.delete(pid);
@@ -189,31 +225,66 @@ async function clearNotificationIfTerminalFocused() {
   }
 }
 
-function showNotification(ancestorPids: number[], terminal: vscode.Terminal, terminalPid: number) {
-  const workspacePath = getWorkspaceLaunchPath();
-  const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
-  const terminalLine = `Terminal: ${terminal.name}`;
-  const message = `${terminalLine}\n${workspaceLine}`;
+function cleanupTerminalState(terminal: vscode.Terminal) {
+  const pid = terminalPidMap.get(terminal);
+  if (pid) {
+    activeNotificationPids.delete(pid);
+    removeNotification(`pi-terminal-${pid}`, log);
+    terminalPidMap.delete(terminal);
+  }
+}
+
+function showNotification(
+  terminal: vscode.Terminal,
+  terminalPid: number,
+  notification: ParsedNotification,
+) {
+  const title = buildNotificationTitle(notification.title);
+  const message = buildNotificationMessage(notification.body, terminal);
 
   log("Showing MacOS notification", {
-    ancestorPids,
-    workspacePath,
+    title,
+    bodyLength: notification.body.length,
     terminalName: terminal.name,
     terminalPid,
   });
 
   activeNotificationPids.add(terminalPid);
+  terminalPidMap.set(terminal, terminalPid);
 
+  sendOsNotification(terminal, terminalPid, title, message);
+}
+
+function buildNotificationTitle(oscTitle?: string) {
+  const trimmed = oscTitle?.trim();
+  const parts = [NOTIFICATION_TITLE, trimmed].filter(Boolean) as string[];
+  return parts.join(" — ");
+}
+
+function buildNotificationMessage(oscBody: string, terminal: vscode.Terminal) {
+  const workspacePath = getWorkspaceLaunchPath();
+  const workspaceLine = `Workspace: ${workspacePath ?? "Unknown"}`;
+  const terminalLine = `Terminal: ${terminal.name}`;
+  const body = oscBody.trim();
+  const parts = [body, terminalLine, workspaceLine].filter(Boolean);
+  return parts.join("\n");
+}
+
+function sendOsNotification(
+  terminal: vscode.Terminal,
+  terminalPid: number,
+  title: string,
+  message: string,
+) {
   const groupId = `pi-terminal-${terminalPid}`;
 
   notify(
     {
-      title: NOTIFICATION_TITLE,
+      title,
       message,
       group: groupId,
     },
     (error: Error | null, _response?: string, metadata?: NotificationResponse) => {
-      // Clear from active set - notification was interacted with or dismissed
       activeNotificationPids.delete(terminalPid);
 
       if (error) {
@@ -222,171 +293,29 @@ function showNotification(ancestorPids: number[], terminal: vscode.Terminal, ter
       }
 
       if (metadata?.activationType === "contentsClicked") {
-        void handleFocusTerminalAction(ancestorPids);
+        void handleFocusTerminalAction(terminal);
       }
     },
     log,
   );
 }
 
-async function handleFocusTerminalAction(ancestorPids: number[]) {
-  log("Focus Terminal action selected", { ancestorPids });
-  const localTerminal = await findTerminalForAncestors(ancestorPids);
-  if (localTerminal) {
-    const localWorkspacePath = getWorkspaceLaunchPath();
-    if (localWorkspacePath) {
-      await bringWindowToForeground(localWorkspacePath);
-    } else {
-      log("No workspace path resolved for local window");
-    }
-    await focusTerminalPanel(localTerminal);
-    return;
+async function handleFocusTerminalAction(terminal: vscode.Terminal) {
+  log("Focus Terminal action selected", { terminalName: terminal.name });
+  const localWorkspacePath = getWorkspaceLaunchPath();
+  if (localWorkspacePath) {
+    await bringWindowToForeground(localWorkspacePath);
+  } else {
+    log("No workspace path resolved for local window");
   }
 
-  const workspacePath = await resolveOwningWorkspacePath(ancestorPids);
-  if (!workspacePath) {
-    log("Unable to resolve owning window workspace path", { ancestorPids });
-    return;
-  }
-
-  await bringWindowToForeground(workspacePath);
+  await focusTerminalPanel(terminal);
 }
 
 async function focusTerminalPanel(terminal: vscode.Terminal) {
   terminal.show(true);
   await vscode.commands.executeCommand("workbench.action.terminal.focus");
   log("Focused terminal panel");
-}
-
-async function findTerminalForAncestors(ancestorPids: number[]) {
-  if (ancestorPids.length === 0) {
-    log("No ancestor PIDs provided for terminal lookup");
-    return undefined;
-  }
-
-  const activeTerminal = vscode.window.activeTerminal;
-  log("Searching terminals for ancestor match", {
-    ancestorPids,
-    terminalCount: vscode.window.terminals.length,
-    hasActiveTerminal: Boolean(activeTerminal),
-  });
-  if (activeTerminal && (await terminalMatchesAncestors(activeTerminal, ancestorPids))) {
-    log("Active terminal matched ancestors");
-    return activeTerminal;
-  }
-
-  for (const terminal of vscode.window.terminals) {
-    if (terminal === activeTerminal) {
-      continue;
-    }
-    if (await terminalMatchesAncestors(terminal, ancestorPids)) {
-      log("Found matching terminal in list");
-      return terminal;
-    }
-  }
-
-  log("No terminal matched ancestor PIDs", { ancestorPids });
-  return undefined;
-}
-
-async function terminalMatchesAncestors(terminal: vscode.Terminal, ancestorPids: number[]) {
-  try {
-    const pid = await terminal.processId;
-    const matches = typeof pid === "number" && ancestorPids.includes(pid);
-    log("Checked terminal processId", { pid, matches });
-    return matches;
-  } catch (error) {
-    log("Failed to read terminal processId", { error: formatError(error) });
-    return false;
-  }
-}
-
-async function resolveOwningWorkspacePath(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths(log);
-  if (socketPaths.length === 0) {
-    log("No socket paths available to resolve owning window");
-    return undefined;
-  }
-
-  const results = await Promise.allSettled(
-    socketPaths.map((socketPath) => locateSocket(socketPath, ancestorPids)),
-  );
-
-  for (const result of results) {
-    if (result.status !== "fulfilled") {
-      continue;
-    }
-
-    if (result.value.ownsTerminal && result.value.workspacePath) {
-      log("Resolved owning window", {
-        socketPath: result.value.socketPath,
-        workspacePath: result.value.workspacePath,
-      });
-      return result.value.workspacePath;
-    }
-  }
-
-  log("No owning window resolved from socket scan", { ancestorPids });
-  return undefined;
-}
-
-async function locateSocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<
-    VscodeTerminalNotifySocketProto["locate"]["response"] & { socketPath: string }
-  >((resolve, reject) => {
-    const socket = net.createConnection({ path: socketPath });
-    let buffer = "";
-
-    socket.on("connect", () => {
-      log("Sending locate command", { socketPath });
-      socket.write(
-        `${JSON.stringify({ command: "locate", ancestorPids } satisfies VscodeTerminalNotifySocketProto["locate"]["request"])}\n`,
-      );
-    });
-
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString();
-      const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) {
-        log("Waiting for complete locate response", { socketPath });
-        return;
-      }
-
-      const line = buffer.slice(0, newlineIndex).trim();
-      let json: unknown;
-      try {
-        json = JSON.parse(line) as unknown;
-      } catch (error) {
-        log("Failed to parse locate response", { socketPath, error: formatError(error) });
-        socket.end();
-        const parseError = error instanceof Error ? error : new Error(formatError(error));
-        reject(parseError);
-        return;
-      }
-
-      try {
-        const payload =
-          VscodeTerminalNotifySocketProtoSchema.shape.locate.shape.response.parse(json);
-        resolve({ ...payload, socketPath });
-      } catch {
-        log("Unexpected locate payload", { socketPath, payload: json });
-        reject(new Error("Unexpected locate payload"));
-      }
-
-      socket.end();
-    });
-
-    socket.on("error", (error) => {
-      log("Locate socket error", { socketPath, error: formatError(error) });
-      reject(error);
-    });
-
-    socket.setTimeout(1000, () => {
-      log("Locate socket timed out", { socketPath });
-      socket.destroy();
-      reject(new Error("Locate socket timed out"));
-    });
-  });
 }
 
 function getWorkspaceLaunchPath() {
@@ -412,19 +341,23 @@ async function bringWindowToForeground(workspacePath: string) {
   }
 }
 
-function parseSocketPayload(line: string): VscodeTerminalNotifySocketRequest {
-  try {
-    const json = JSON.parse(line) as unknown;
-    const payload = VscodeTerminalNotifySocketRequestSchema.parse(json);
-    log("Received socket payload", {
-      command: payload.command,
-      ancestorPids: payload.ancestorPids,
-    });
-    return payload;
-  } catch (error) {
-    log("Failed to parse socket payload", { error: formatError(error) });
-    throw error;
+async function resolveTerminalPid(terminal: vscode.Terminal) {
+  const cached = terminalPidMap.get(terminal);
+  if (cached) {
+    return cached;
   }
+
+  try {
+    const pid = await terminal.processId;
+    if (typeof pid === "number") {
+      terminalPidMap.set(terminal, pid);
+      return pid;
+    }
+  } catch (error) {
+    log("Failed to read terminal processId", { error: formatError(error) });
+  }
+
+  return undefined;
 }
 
 function log(message: string, data?: unknown) {
@@ -435,16 +368,6 @@ function log(message: string, data?: unknown) {
     outputChannel.appendLine(line);
   }
   console.log(line);
-}
-
-function isNodeError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error;
-}
-
-function getSocketPath() {
-  const socketPath = path.join(getSocketDirectory(), `${SOCKET_PREFIX}${process.pid}.sock`);
-  log("Computed socket path", { socketPath });
-  return socketPath;
 }
 
 function execFileAsync(command: string, args: string[]) {
@@ -459,30 +382,4 @@ function execFileAsync(command: string, args: string[]) {
       resolve({ stdout, stderr });
     });
   });
-}
-
-async function ensureSocketDirectory(socketPath: string) {
-  const dir = path.dirname(socketPath);
-  log("Ensuring socket directory exists", { dir });
-  await fs.promises.mkdir(dir, { recursive: true });
-}
-
-async function removeStaleSocket(socketPath: string) {
-  try {
-    await fs.promises.stat(socketPath);
-  } catch (error) {
-    if (isNodeError(error) && error.code === "ENOENT") {
-      log("No stale socket to remove", { socketPath });
-      return;
-    }
-    log("Failed to check stale socket", { error: formatError(error) });
-    return;
-  }
-
-  try {
-    await fs.promises.unlink(socketPath);
-    log("Removed stale socket", { socketPath });
-  } catch (error) {
-    log("Failed to remove stale socket", { error: formatError(error) });
-  }
 }

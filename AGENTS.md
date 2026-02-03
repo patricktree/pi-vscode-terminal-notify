@@ -2,9 +2,9 @@
 
 ## Repo Structure
 
-- `packages/vscode-extension/`: VS Code extension that exposes window focus + active terminal PID over a Unix socket and shows macOS notifications.
-- `packages/pi-extension/`: Pi extension that sends `maybeNotify` to all VS Code sockets on `agent_end` with ancestor PIDs; the VS Code extension decides whether to show a notification.
-- `packages/shared/`: Shared socket types/utilities used by both extensions.
+- `packages/vscode-extension/`: VS Code extension that listens for OSC 777 in terminal output and shows macOS notifications.
+- `packages/pi-extension/`: Pi extension that emits OSC 777 notifications on `agent_end` with the last assistant response.
+- `packages/shared/`: Shared helper utilities used by both extensions.
 
 ## Validation
 

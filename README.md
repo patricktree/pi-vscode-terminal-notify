@@ -1,12 +1,12 @@
-# Pi ↔ VS Code Terminal Notification Socket
+# Pi ↔ VS Code Terminal Notification (OSC 777)
 
-macOS-only. Extensions throw on non-darwin platforms.
+macOS-only notifications: the VS Code extension throws on non-darwin platforms, while the Pi extension emits OSC 777 on all platforms.
 
 This repository contains three pieces:
 
-1. **VS Code extension** that listens on a Unix socket, determines terminal ownership, and shows macOS notifications when Pi is not the active terminal.
-2. **Pi extension** that sends `maybeNotify` to all VS Code sockets on `agent_end` with ancestor PIDs.
-3. **Shared package** with socket types + helpers used by both extensions.
+1. **VS Code extension** that listens for OSC 777 notifications in terminal output and shows macOS notifications when Pi is not the active terminal.
+2. **Pi extension** that emits OSC 777 notifications on `agent_end` with a short summary of the last assistant message.
+3. **Shared package** with small helper utilities used by both extensions.
 
 ## Shared Package
 
@@ -33,26 +33,21 @@ The VS Code extension uses a vendored `terminal-notifier` app bundle to display 
 
 Without this permission, notifications will silently fail to appear.
 
-### Socket Server
+### OSC 777 Flow
 
-The extension listens on per-window sockets under:
+The Pi extension emits an OSC 777 notification in the terminal output:
 
 ```txt
-~/.pi/pi-vscode-terminal-notify/pi-vscode-terminal-notify-<pid>.sock
+ESC ] 777 ; notify ; <title> ; <body> BEL
 ```
 
-### Socket API
-
-Each socket accepts newline-delimited JSON commands:
-
-- `maybeNotify` → fire-and-forget; VS Code extension checks if the terminal (identified by ancestor PIDs) belongs to this window and is unfocused, then shows a macOS notification if appropriate.
-- `locate` → returns `{ ownsTerminal, workspacePath }` for a given ancestor PID chain (used to focus the owning window).
+The VS Code extension reads terminal output (including tmux passthrough) and triggers the macOS notification UI when it sees the OSC 777 sequence.
 
 ## Pi Extension
 
 Location: `packages/pi-extension/`
 
-This extension now depends on the shared package, so install it via Pi packages using a local path (Pi will resolve dependencies from this repo).
+This extension depends on the shared package, so install it via Pi packages using a local path (Pi will resolve dependencies from this repo).
 
 Build the workspace first:
 
@@ -78,9 +73,9 @@ Restart Pi.
 
 When Pi finishes a prompt (`agent_end`), it:
 
-- Builds the ancestor PID chain (up to 15 levels).
-- Sends a `maybeNotify` command to all VS Code sockets with the ancestor PIDs.
-- Each VS Code extension instance determines if it owns the terminal and whether to show a notification.
+- Extracts the last assistant text response.
+- Emits an OSC 777 notification to the terminal (title + truncated body).
+- VS Code parses the OSC 777 message and decides whether to show a macOS notification based on focus state.
 
 Clicking the notification focuses the owning VS Code window and terminal when possible.
 

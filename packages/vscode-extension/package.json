@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@types/vscode": "^1.85.0",
+    "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^8.51.0",
     "@typescript-eslint/parser": "^8.51.0",
     "eslint": "^8.57.1",
@@ -53,6 +53,6 @@
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "pnpm": "10.28.2",
-    "vscode": "^1.85.0"
+    "vscode": "^1.93.0"
   }
 }

@@ -1,17 +1,11 @@
+// Derived from https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/notify.ts
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import {
-  assertDarwin,
-  formatError,
-  listSocketPaths,
-  type VscodeTerminalNotifySocketProto,
-} from "@patricktree/pi-vscode-terminal-notify.shared";
-import net from "node:net";
+import { formatError, sanitizeOscValue } from "@patricktree/pi-vscode-terminal-notify.shared";
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import fs from "node:fs";
-import { execFile } from "node:child_process";
 
-const MAX_ANCESTOR_DEPTH = 15;
+const MAX_BODY_LENGTH = 200;
 const EXTENSION_LOG_PATH = path.join(
   os.homedir(),
   ".pi",
@@ -19,95 +13,80 @@ const EXTENSION_LOG_PATH = path.join(
   "pi-extension-log.txt",
 );
 
-export default function registerVscodeSocketNotify(pi: ExtensionAPI) {
-  assertDarwin();
-  pi.on("agent_end", async () => {
-    const ancestorPids = await getAncestorPids();
-    await sendMaybeNotify(ancestorPids);
-  });
-}
+type Message = { role?: string; content?: unknown };
 
-async function getAncestorPids(maxDepth = MAX_ANCESTOR_DEPTH) {
-  const ancestors: number[] = [];
-  let currentPid = process.pid;
+type TextPart = { type: "text"; text: string };
 
-  for (let depth = 0; depth < maxDepth; depth += 1) {
-    ancestors.push(currentPid);
-    if (currentPid === 1) {
-      break;
+const isTextPart = (part: unknown): part is TextPart => {
+  if (!part || typeof part !== "object") {
+    return false;
+  }
+
+  const record = part as Record<string, unknown>;
+  return record["type"] === "text" && typeof record["text"] === "string";
+};
+
+const extractLastAssistantText = (messages: Message[]): string | null => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i];
+    if (message?.role !== "assistant") {
+      continue;
     }
 
-    const parentPid = await getParentPid(currentPid);
-    if (!parentPid || parentPid === currentPid) {
-      break;
+    const content = message.content;
+    if (typeof content === "string") {
+      return content.trim() || null;
     }
 
-    currentPid = parentPid;
+    if (Array.isArray(content)) {
+      const text = content
+        .filter(isTextPart)
+        .map((part) => part.text)
+        .join("\n")
+        .trim();
+      return text || null;
+    }
+
+    return null;
   }
 
-  log("Collected ancestor PIDs", { ancestors });
-  return ancestors;
-}
+  return null;
+};
 
-async function sendMaybeNotify(ancestorPids: number[]) {
-  const socketPaths = await listSocketPaths(log);
-
-  if (socketPaths.length === 0) {
-    log("No VS Code sockets found, skipping notification");
-    return;
+const normalizeNotificationText = (text: string | null): string => {
+  if (!text) {
+    return "";
   }
 
-  log("Sending maybeNotify to VS Code windows", { socketCount: socketPaths.length });
-  await Promise.all(socketPaths.map((socketPath) => maybeNotifySocket(socketPath, ancestorPids)));
-  log("maybeNotify sent to all sockets");
-}
+  return text.replace(/\s+/g, " ").trim();
+};
 
-async function maybeNotifySocket(socketPath: string, ancestorPids: number[]) {
-  return new Promise<void>((resolve, reject) => {
-    const socket = net.createConnection({ path: socketPath });
-
-    socket.on("connect", () => {
-      log("Sending maybeNotify command", { socketPath });
-      socket.write(
-        `${JSON.stringify({ command: "maybeNotify", ancestorPids } satisfies VscodeTerminalNotifySocketProto["maybeNotify"]["request"])}\n`,
-      );
-      socket.end();
-    });
-
-    socket.on("error", (error) => {
-      log("maybeNotify socket error", { socketPath, error: formatError(error) });
-      reject(error);
-    });
-
-    socket.on("close", () => {
-      resolve();
-    });
-  });
-}
-
-async function getParentPid(pid: number) {
-  try {
-    const { stdout } = await execFileAsync("ps", ["-o", "ppid=", "-p", String(pid)]);
-    const parsed = Number.parseInt(stdout.trim(), 10);
-    const parent = Number.isNaN(parsed) ? undefined : parsed;
-    log("Fetched parent PID", { pid, parent });
-    return parent;
-  } catch (error) {
-    log("Failed to fetch parent PID", { pid, error: formatError(error) });
-    return undefined;
+const formatNotification = (text: string | null): { title: string; body: string } => {
+  const normalized = normalizeNotificationText(text);
+  if (!normalized) {
+    return { title: "Ready for input", body: "" };
   }
-}
 
-function execFileAsync(command: string, args: string[]) {
-  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(command, args, (error, stdout, stderr) => {
-      if (error) {
-        const execError = error instanceof Error ? error : new Error(formatError(error));
-        reject(execError);
-        return;
-      }
-      resolve({ stdout, stderr });
-    });
+  const body =
+    normalized.length > MAX_BODY_LENGTH
+      ? `${normalized.slice(0, MAX_BODY_LENGTH - 1)}…`
+      : normalized;
+  return { title: "π", body };
+};
+
+const sendOscNotification = (title: string, body: string): void => {
+  // Based on https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/notify.ts
+  const safeTitle = sanitizeOscValue(title);
+  const safeBody = sanitizeOscValue(body);
+  process.stdout.write(`\u001B]777;notify;${safeTitle};${safeBody}\u0007`);
+};
+
+export default function registerOscNotify(pi: ExtensionAPI) {
+  pi.on("agent_end", (event) => {
+    const lastText = extractLastAssistantText(event.messages);
+    const { title, body } = formatNotification(lastText);
+    sendOscNotification(title, body);
+    log("Sent OSC 777 notification", { title, bodyLength: body.length });
   });
 }
 
