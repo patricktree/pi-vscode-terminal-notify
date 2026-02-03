@@ -55,6 +55,9 @@
   "engines": {
     "pnpm": "10.28.2"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "pi": {
     "extensions": [
       "./pi-extension-vscode-terminal-notify.ts"

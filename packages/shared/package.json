@@ -49,5 +49,8 @@
   "packageManager": "pnpm@10.28.2",
   "engines": {
     "pnpm": "10.28.2"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
