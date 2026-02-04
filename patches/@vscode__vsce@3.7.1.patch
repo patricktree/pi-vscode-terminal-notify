@@ -1,0 +1,13 @@
+diff --git a/out/package.js b/out/package.js
+index f0830a10f292856b0297d3fb6b008065fd2e3ac5..1c04de9281ba9751f5540441189d6469e2bc5615 100644
+--- a/out/package.js
++++ b/out/package.js
+@@ -1226,7 +1226,7 @@ const defaultIgnore = [
+ ];
+ async function collectAllFiles(cwd, dependencies, dependencyEntryPoints, followSymlinks = true) {
+     const deps = await (0, npm_1.getDependencies)(cwd, dependencies, dependencyEntryPoints);
+-    const promises = deps.map(dep => (0, glob_1.glob)('**', { cwd: dep, nodir: true, follow: followSymlinks, dot: true, ignore: 'node_modules/**' }).then(files => files.map(f => path.relative(cwd, path.join(dep, f))).map(f => f.replace(/\\/g, '/'))));
++    const promises = deps.map(dep => (0, glob_1.glob)('**', { cwd: dep, nodir: true, follow: followSymlinks, dot: true, }).then(files => files.map(f => path.relative(cwd, path.join(dep, f))).map(f => f.replace(/\\/g, '/'))));
+     return Promise.all(promises).then(util.flatten);
+ }
+ function getDependenciesOption(options) {

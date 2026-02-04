@@ -35,19 +35,14 @@ pnpm run version
 pnpm install --frozen-lockfile && \
     pnpm -r run build && \
     pnpm -r run lint && \
-    DEPLOY_TARGET_DIR=$(mktemp -d /tmp/deploy-target-dir-XXX) && \
-    pnpm --filter 'pi-vscode-terminal-notify' --prod --config.injectWorkspacePackages=true deploy $DEPLOY_TARGET_DIR && \
-    (cd $DEPLOY_TARGET_DIR && pnpm --frozen-lockfile --prod --config.autoInstallPeers=false install)
+    cd packages/vscode-extension && \
+    rm -rf ./node_modules && \
+    npm install --omit=dev --no-package-lock && \
+    pnpm dlx @vscode/vsce package --allow-unused-files-pattern
 ```
 
-Then package and inspect the VSIX:
+Publish the VSIX:
 
 ```bash
-cd $DEPLOY_TARGET_DIR && pnpm dlx @vscode/vsce package --no-dependencies --allow-unused-files-pattern
-```
-
-After verifying, publish the VSIX:
-
-```bash
-cd $DEPLOY_TARGET_DIR && pnpm dlx @vscode/vsce publish --packagePath ./pi-vscode-terminal-notify-*.vsix
+cd $VSCE_PACKAGING_DIR && pnpm dlx @vscode/vsce publish --packagePath ./pi-vscode-terminal-notify-*.vsix
 ```

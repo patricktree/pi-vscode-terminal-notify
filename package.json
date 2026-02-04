@@ -8,6 +8,7 @@
     "@changesets/cli": "^2.29.8"
   },
   "devDependencies": {
+    "@vscode/vsce": "^3.7.1",
     "prettier-plugin-packagejson": "^2.5.22"
   }
 }
