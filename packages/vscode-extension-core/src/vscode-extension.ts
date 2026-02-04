@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import {
+  ensureExecutable,
   notify,
   removeNotification,
   type NotificationResponse,
@@ -18,11 +19,18 @@ let outputChannel: vscode.OutputChannel | undefined;
 const activeNotificationPids = new Set<number>();
 const terminalPidMap = new Map<vscode.Terminal, number>();
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   assertDarwin();
   outputChannel = vscode.window.createOutputChannel("Pi Terminal Notify");
   log("Output channel initialized");
   log("Extension activating");
+
+  try {
+    await ensureExecutable();
+    log("Notifier binary marked executable");
+  } catch (error) {
+    log("Failed to mark notifier binary executable", { error: formatError(error) });
+  }
 
   context.subscriptions.push(
     vscode.window.onDidStartTerminalShellExecution((event) => {

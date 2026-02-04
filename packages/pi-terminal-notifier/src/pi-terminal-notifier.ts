@@ -3,6 +3,7 @@
  * Replaces node-notifier for macOS notifications.
  */
 import { execFile, spawn } from "node:child_process";
+import { chmod } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,6 +46,17 @@ export type NotificationCallback = (
 ) => void;
 
 export type LogFunction = (message: string, data?: unknown) => void;
+
+/**
+ * Ensure the vendored binary is executable.
+ *
+ * VSIX packages are ZIP archives which do not preserve Unix file permissions,
+ * so the executable bit is lost after Marketplace install.  Call this once
+ * during extension activation.
+ */
+export async function ensureExecutable(): Promise<void> {
+  await chmod(NOTIFIER_PATH, 0o755);
+}
 
 /**
  * Send a macOS notification using the vendored pi-terminal-notifier.
