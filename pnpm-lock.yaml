@@ -175,8 +175,8 @@ importers:
   packages/vscode-extension:
     dependencies:
       '@patricktree/pi-vscode-terminal-notify.vscode-extension-core':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: workspace:*
+        version: link:../vscode-extension-core
     devDependencies:
       '@types/node':
         specifier: ^22.10.5
@@ -719,18 +719,6 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
-
-  '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier@0.1.0':
-    resolution: {integrity: sha512-RF6IOZJL5Bcq4PwxOIZbnIVMRbx/K7y/H9vpqXWtuLCoMsyLttCyVExlkmnV7k9zF//p44gDiMrJTGHbZhT+yw==}
-    engines: {pnpm: 10.28.2}
-
-  '@patricktree/pi-vscode-terminal-notify.shared@0.1.0':
-    resolution: {integrity: sha512-DH5Otuoc8cLtDjIsCTEYErG7c+7xi2WKckS4+4wMIvYg60MXtvT4hhqqCsJzfnwotOKOr5k5cqmi6w0rWrUmBQ==}
-    engines: {pnpm: 10.28.2}
-
-  '@patricktree/pi-vscode-terminal-notify.vscode-extension-core@0.1.0':
-    resolution: {integrity: sha512-6rvdF+urPUlkcY3ec3t8WrFir13yKTIIvEYz8ByAjg/GIyRe2qw6J9q97LGW5T91GkBO4eeLHyOS8blW99F/RA==}
-    engines: {pnpm: 10.28.2}
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -4288,15 +4276,6 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
-
-  '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier@0.1.0': {}
-
-  '@patricktree/pi-vscode-terminal-notify.shared@0.1.0': {}
-
-  '@patricktree/pi-vscode-terminal-notify.vscode-extension-core@0.1.0':
-    dependencies:
-      '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier': 0.1.0
-      '@patricktree/pi-vscode-terminal-notify.shared': 0.1.0
 
   '@pkgjs/parseargs@0.11.0':
     optional: true

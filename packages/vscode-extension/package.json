@@ -1,7 +1,7 @@
 {
   "name": "pi-vscode-terminal-notify",
   "displayName": "Extension for Pi Coding Agent Notifications",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "A VSCode extension to show terminal notifications from Pi Coding Agent when it needs user input.",
   "categories": [
@@ -48,7 +48,7 @@
     "onUri"
   ],
   "dependencies": {
-    "@patricktree/pi-vscode-terminal-notify.vscode-extension-core": "0.1.0"
+    "@patricktree/pi-vscode-terminal-notify.vscode-extension-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
