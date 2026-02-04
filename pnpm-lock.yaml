@@ -167,15 +167,15 @@ importers:
   packages/vscode-extension:
     dependencies:
       '@patricktree/pi-vscode-terminal-notify.vscode-extension-core':
-        specifier: workspace:*
-        version: link:../vscode-extension-core
+        specifier: 0.1.0
+        version: 0.1.0
     devDependencies:
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.7
       '@types/vscode':
-        specifier: ^1.93.0
-        version: 1.108.1
+        specifier: 1.93.0
+        version: 1.93.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.51.0
         version: 8.54.0(@typescript-eslint/parser@8.54.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)
@@ -662,6 +662,18 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
+  '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier@0.1.0':
+    resolution: {integrity: sha512-RF6IOZJL5Bcq4PwxOIZbnIVMRbx/K7y/H9vpqXWtuLCoMsyLttCyVExlkmnV7k9zF//p44gDiMrJTGHbZhT+yw==}
+    engines: {pnpm: 10.28.2}
+
+  '@patricktree/pi-vscode-terminal-notify.shared@0.1.0':
+    resolution: {integrity: sha512-DH5Otuoc8cLtDjIsCTEYErG7c+7xi2WKckS4+4wMIvYg60MXtvT4hhqqCsJzfnwotOKOr5k5cqmi6w0rWrUmBQ==}
+    engines: {pnpm: 10.28.2}
+
+  '@patricktree/pi-vscode-terminal-notify.vscode-extension-core@0.1.0':
+    resolution: {integrity: sha512-6rvdF+urPUlkcY3ec3t8WrFir13yKTIIvEYz8ByAjg/GIyRe2qw6J9q97LGW5T91GkBO4eeLHyOS8blW99F/RA==}
+    engines: {pnpm: 10.28.2}
+
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -894,6 +906,9 @@ packages:
 
   '@types/vscode@1.108.1':
     resolution: {integrity: sha512-DerV0BbSzt87TbrqmZ7lRDIYaMiqvP8tmJTzW2p49ZBVtGUnGAu2RGQd1Wv4XMzEVUpaHbsemVM5nfuQJj7H6w==}
+
+  '@types/vscode@1.93.0':
+    resolution: {integrity: sha512-kUK6jAHSR5zY8ps42xuW89NLcBpw1kOabah7yv38J8MyiYuOHxLQBi0e7zeXbQgVefDy/mZZetqEFC+Fl5eIEQ==}
 
   '@typescript-eslint/eslint-plugin@8.54.0':
     resolution: {integrity: sha512-hAAP5io/7csFStuOmR782YmTthKBJ9ND3WVL60hcOjvtGFb+HJxH4O5huAcmcZ9v9G8P+JETiZ/G1B8MALnWZQ==}
@@ -3481,6 +3496,15 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
+  '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier@0.1.0': {}
+
+  '@patricktree/pi-vscode-terminal-notify.shared@0.1.0': {}
+
+  '@patricktree/pi-vscode-terminal-notify.vscode-extension-core@0.1.0':
+    dependencies:
+      '@patricktree/pi-vscode-terminal-notify.pi-terminal-notifier': 0.1.0
+      '@patricktree/pi-vscode-terminal-notify.shared': 0.1.0
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -3818,6 +3842,8 @@ snapshots:
   '@types/normalize-package-data@2.4.4': {}
 
   '@types/vscode@1.108.1': {}
+
+  '@types/vscode@1.93.0': {}
 
   '@typescript-eslint/eslint-plugin@8.54.0(@typescript-eslint/parser@8.54.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1)(typescript@5.9.3)':
     dependencies:

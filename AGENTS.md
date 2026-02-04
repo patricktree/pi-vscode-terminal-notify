@@ -20,3 +20,34 @@ pnpm -r run lint:fix
 ## Publishing
 
 - Add a Changeset (`pnpm exec changeset`) for user-facing package changes; omit for tooling-only tweaks unless publishing impact.
+
+### Versioning
+
+After adding changesets, run the root `version` script to bump all versions (including the VS Code extension sync):
+
+```bash
+pnpm run version
+```
+
+### VS Code Extension → Marketplace
+
+```bash
+pnpm install --frozen-lockfile && \
+    pnpm -r run build && \
+    pnpm -r run lint && \
+    DEPLOY_TARGET_DIR=$(mktemp -d /tmp/deploy-target-dir-XXX) && \
+    pnpm --filter 'pi-vscode-terminal-notify' --prod --config.injectWorkspacePackages=true deploy $DEPLOY_TARGET_DIR && \
+    (cd $DEPLOY_TARGET_DIR && pnpm --frozen-lockfile --prod --config.autoInstallPeers=false install)
+```
+
+Then package and inspect the VSIX:
+
+```bash
+cd $DEPLOY_TARGET_DIR && pnpm dlx @vscode/vsce package --no-dependencies --allow-unused-files-pattern
+```
+
+After verifying, publish the VSIX:
+
+```bash
+cd $DEPLOY_TARGET_DIR && pnpm dlx @vscode/vsce publish --packagePath ./pi-vscode-terminal-notify-*.vsix
+```
