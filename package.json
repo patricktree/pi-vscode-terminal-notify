@@ -2,7 +2,7 @@
   "name": "pi-vscode-terminal-notify-monorepo-root",
   "private": true,
   "scripts": {
-    "version": "pnpm exec changeset version && node scripts/sync-vscode-extension-version.mjs"
+    "version": "pnpm exec changeset version"
   },
   "dependencies": {
     "@changesets/cli": "^2.29.8"
