@@ -45,6 +45,9 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.onDidChangeWindowState(() => {
       void clearNotificationIfTerminalFocused();
     }),
+    vscode.window.tabGroups.onDidChangeTabs(() => {
+      void clearNotificationIfTerminalFocused();
+    }),
   );
 
   log("Extension activated");
@@ -100,13 +103,33 @@ function shouldSkipNotification(terminal: vscode.Terminal) {
   const windowFocused = vscode.window.state.focused;
   const activeTerminal = vscode.window.activeTerminal;
   const piTerminalActive = activeTerminal === terminal;
+  const inEditorArea = isTerminalInEditorArea(terminal);
+  const visibleInEditorArea = inEditorArea && isTerminalVisibleInEditorArea(terminal);
 
-  log("Checking notification conditions", { windowFocused, piTerminalActive });
+  log("Checking notification conditions", {
+    windowFocused,
+    piTerminalActive,
+    inEditorArea,
+    visibleInEditorArea,
+  });
 
   if (windowFocused && piTerminalActive) {
-    log("Skipping notification - Pi terminal is focused");
+    /*
+     * Terminal is in the editor area but its tab is hidden behind another editor —
+     * activeTerminal still reports it, but the user can't see it → show notification
+     */
+    if (inEditorArea && !visibleInEditorArea) {
+      log("Terminal is in editor area but tab is not active - showing notification");
+      return false;
+    }
+
+    log(
+      "Skipping notification - window focused, Pi terminal active, in editor area and visible OR not in editor area at all",
+    );
     return true;
   }
+
+  log("Showing notification - Window not focused or Pi terminal not active");
 
   return false;
 }
@@ -114,6 +137,11 @@ function shouldSkipNotification(terminal: vscode.Terminal) {
 async function clearNotificationIfTerminalFocused() {
   const terminal = vscode.window.activeTerminal;
   if (!terminal || !vscode.window.state.focused) {
+    return;
+  }
+
+  // Terminal is in the editor area but its tab is hidden — don't clear
+  if (isTerminalInEditorArea(terminal) && !isTerminalVisibleInEditorArea(terminal)) {
     return;
   }
 
@@ -209,13 +237,54 @@ async function handleFocusTerminalAction(terminal: vscode.Terminal) {
     log("No workspace path resolved for local window");
   }
 
-  await focusTerminalPanel(terminal);
+  await focusTerminal(terminal);
 }
 
-async function focusTerminalPanel(terminal: vscode.Terminal) {
-  terminal.show(true);
-  await vscode.commands.executeCommand("workbench.action.terminal.focus");
-  log("Focused terminal panel");
+async function focusTerminal(terminal: vscode.Terminal) {
+  if (isTerminalInEditorArea(terminal)) {
+    // For editor-area terminals, show(false) activates the tab and focuses it
+    terminal.show(false);
+    log("Focused terminal in editor area");
+  } else {
+    terminal.show(true);
+    await vscode.commands.executeCommand("workbench.action.terminal.focus");
+    log("Focused terminal in panel");
+  }
+}
+
+/**
+ * Check if a terminal lives in the editor area (as opposed to the bottom panel)
+ * by looking for a matching TabInputTerminal tab in any tab group.
+ *
+ * Limitation: `TabInputTerminal` exposes no identifying properties (no PID, no URI),
+ * so we correlate via `tab.label === terminal.name`. If two terminals share the same
+ * name in the editor area this match is ambiguous.
+ */
+function isTerminalInEditorArea(terminal: vscode.Terminal): boolean {
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) {
+      if (tab.input instanceof vscode.TabInputTerminal && tab.label === terminal.name) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if a terminal's editor tab is the active (visible) tab in its group.
+ * Only meaningful for terminals that are in the editor area.
+ *
+ * Same name-matching caveat as {@link isTerminalInEditorArea}.
+ */
+function isTerminalVisibleInEditorArea(terminal: vscode.Terminal): boolean {
+  for (const group of vscode.window.tabGroups.all) {
+    const activeTab = group.activeTab;
+    if (activeTab?.input instanceof vscode.TabInputTerminal && activeTab.label === terminal.name) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function getWorkspaceLaunchPath() {
