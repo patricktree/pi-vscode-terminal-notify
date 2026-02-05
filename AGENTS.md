@@ -31,12 +31,13 @@ pnpm run version
 
 ### VS Code Extension → Marketplace
 
+## Prepare and package VSIX
+
 Dependency `"@patricktree/pi-vscode-terminal-notify.vscode-extension-core": "workspace:*"` of `pi-vscode-terminal-notify` must be replaced with real versions before `npm install` (npm fetches from the registry, not the monorepo).
 
 ```bash
 pnpm install --frozen-lockfile && \
     pnpm -r run build && \
-    pnpm -r run lint && \
     cd packages/vscode-extension && \
     node -e "
       const fs = require('fs');
@@ -51,14 +52,13 @@ pnpm install --frozen-lockfile && \
     " && \
     rm -rf ./node_modules && \
     npm install --omit=dev --no-package-lock && \
-    pnpm dlx @vscode/vsce package --allow-unused-files-pattern
+    pnpm dlx @vscode/vsce package --allow-unused-files-pattern && \
+    # after packaging, restore package.json
+    git checkout package.json
 ```
 
-> **Important:** Do NOT commit the modified `package.json`. After packaging, restore it:
-> `git checkout package.json`
-
-Publish the VSIX:
+## Publish VSIX
 
 ```bash
-cd $VSCE_PACKAGING_DIR && pnpm dlx @vscode/vsce publish --packagePath ./pi-vscode-terminal-notify-*.vsix
+cd packages/vscode-extension && pnpm dlx @vscode/vsce publish --packagePath ./pi-vscode-terminal-notify-*.vsix
 ```

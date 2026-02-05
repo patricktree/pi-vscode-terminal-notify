@@ -1,63 +1,37 @@
-# Pi ↔ VS Code Terminal Notification (OSC 777)
+# Pi Terminal Notify for VS Code
 
-macOS-only notifications: the VS Code extension throws on non-darwin platforms, while the Pi extension emits OSC 777 on all platforms.
+macOS notifications for the [Pi coding agent](https://pi.dev) — get notified when Pi is waiting for input and the terminal is not focused.
 
-This repository contains three pieces:
+![Example macOS notification from Pi](packages/vscode-extension/assets/notification-example.png)
 
-1. **VS Code extension** that listens for OSC 777 notifications in terminal output and shows macOS notifications when Pi is not the active terminal.
-2. **Pi extension** that emits OSC 777 notifications on `agent_end` with a short summary of the last assistant message.
-3. **Shared package** with small helper utilities used by both extensions.
+## Features
 
-## Shared Package
+- Native macOS notifications when the Pi terminal is waiting for input but not visible.
+- Click a notification to focus the owning VS Code window and terminal.
+- Notifications auto-dismiss when you switch to the terminal yourself.
+- Grouped per terminal — new notifications replace stale ones.
 
-Location: `packages/shared/`
+## Installation
 
-## VS Code Extension
+Two components are needed: a **VS Code extension** (receives and displays notifications) and a **Pi extension** (emits them).
 
-Location: `packages/vscode-extension/`
+### 1. VS Code extension
 
-```bash
-pnpm install
-pnpm --filter pi-vscode-terminal-notify run build
-```
+Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify).
 
-Load the extension in VS Code (Command Palette → "Developer: Install Extension from Location...") or package it using `vsce`.
+On first use, macOS will prompt for notification permissions — click **Allow**.
+If you missed the prompt, enable it manually: **System Settings → Notifications → pi-terminal-notifier → Allow Notifications**.
 
-### Notification Permissions
+### 2. Pi extension
 
-The VS Code extension uses a vendored `terminal-notifier` app bundle to display macOS notifications. On first use, you must grant notification permissions:
-
-1. Open **System Settings → Notifications**
-2. Find **"terminal-notifier"** with the Pi logo in the list
-3. Enable **"Allow Notifications"**
-
-Without this permission, notifications will silently fail to appear.
-
-### OSC 777 Flow
-
-The Pi extension emits an OSC 777 notification in the terminal output:
-
-```txt
-ESC ] 777 ; notify ; <title> ; <body> BEL
-```
-
-The VS Code extension reads terminal output (including tmux passthrough) and triggers the macOS notification UI when it sees the OSC 777 sequence.
-
-## Pi Extension
-
-Location: `packages/pi-extension/`
-
-This extension depends on the shared package, so install it via Pi packages using a local path (Pi will resolve dependencies from this repo).
-
-Build the workspace first:
+Build the workspace, then register the package in your Pi settings:
 
 ```bash
 pnpm install
 pnpm -r run build
 ```
 
-Then add the extension file as a local package in your Pi settings (global
-`~/.pi/agent/settings.json` or project `.pi/settings.json`):
+Add the extension to your Pi settings (`~/.pi/agent/settings.json` or project-level `.pi/settings.json`):
 
 ```json
 {
@@ -69,17 +43,51 @@ Then add the extension file as a local package in your Pi settings (global
 
 Restart Pi.
 
-### Behavior
+## How it works
 
-When Pi finishes a prompt (`agent_end`), it:
+The notification pipeline has three stages:
 
-- Extracts the last assistant text response.
-- Emits an OSC 777 notification to the terminal (title + truncated body).
-- VS Code parses the OSC 777 message and decides whether to show a macOS notification based on focus state.
+1. **Pi extension emits an OSC 777 escape sequence.**
+   When the Pi coding agent finishes a turn (`agent_end`), the [Pi extension](packages/pi-extension/) extracts the last assistant message, truncates it, and writes an [OSC 777](https://iterm2.com/documentation-escape-codes.html) `notify` sequence (`ESC ] 777 ; notify ; <title> ; <body> BEL`) to the terminal's stdout.
 
-Clicking the notification focuses the owning VS Code window and terminal when possible.
+2. **VS Code extension parses the terminal stream.**
+   The extension listens for every shell execution via `onDidStartTerminalShellExecution`, reads the output stream, and feeds each chunk into an OSC parser that detects `777;notify` sequences (including tmux passthrough-wrapped ones). When a notification is parsed, the extension checks whether the originating terminal is currently visible and focused — if it is, the notification is suppressed.
 
-### Logging
+3. **Native macOS notification is shown.**
+   If the terminal is not focused, the extension invokes [pi-terminal-notifier](packages/pi-terminal-notifier/) (a vendored macOS notification binary) to post a native notification. Notifications are grouped per terminal PID so newer ones replace stale ones. Clicking a notification brings the VS Code window to the foreground and focuses the originating terminal. Notifications are automatically cleared when the user switches to the terminal on their own.
 
-- Pi extension logs to `~/.pi/pi-vscode-terminal-notify/pi-extension-log.txt`.
-- VS Code extension logs to the "Pi Terminal Notify" output channel (and the extension host console).
+## Repository structure
+
+| Package                                                    | Description                                                                     |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`vscode-extension`](packages/vscode-extension/)           | VS Code extension shell — wires core logic to VS Code APIs.                     |
+| [`vscode-extension-core`](packages/vscode-extension-core/) | Publishable core logic — OSC 777 parser, notification dispatch, focus handling. |
+| [`pi-extension`](packages/pi-extension/)                   | Pi extension — emits OSC 777 on `agent_end` with the last assistant response.   |
+| [`pi-terminal-notifier`](packages/pi-terminal-notifier/)   | Vendored macOS notification binary wrapper.                                     |
+| [`shared`](packages/shared/)                               | Shared utilities (`assertDarwin`, `formatError`, `sanitizeOscValue`).           |
+
+## Development
+
+```bash
+pnpm install
+pnpm -r run build
+pnpm -r run lint:fix
+```
+
+Load the VS Code extension locally via **Command Palette → Developer: Install Extension from Location…** pointing at `packages/vscode-extension/`.
+
+## Logging
+
+- **VS Code extension** → "Pi Terminal Notify" output channel (and extension host console).
+- **Pi extension** → `~/.pi/pi-vscode-terminal-notify/pi-extension-log.txt`.
+
+## Attribution
+
+- The VS Code extension is derived from [`vscode-terminal-osc-notifier`](https://github.com/wbopan/vscode-terminal-osc-notifier) (MIT).
+- The Pi extension is derived from [`notify.ts`](https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/notify.ts) (Apache-2.0).
+
+See [NOTICE](NOTICE) for details.
+
+## License
+
+[Apache-2.0](LICENSE)

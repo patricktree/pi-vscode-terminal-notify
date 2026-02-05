@@ -11,7 +11,7 @@
     "type": "git",
     "url": "https://github.com/patricktree/pi-vscode-terminal-notify.git"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": {
     "name": "Patrick Kerschbaum"
   },
@@ -19,7 +19,8 @@
   "files": [
     "pi-extension-vscode-terminal-notify.ts",
     "NOTICE",
-    "licenses/**"
+    "licenses/**",
+    "assets/**"
   ],
   "scripts": {
     "build": "tsc --build ./tsconfig.json",
@@ -61,6 +62,7 @@
   "pi": {
     "extensions": [
       "./pi-extension-vscode-terminal-notify.ts"
-    ]
+    ],
+    "image": "assets/notification-example.png"
   }
 }

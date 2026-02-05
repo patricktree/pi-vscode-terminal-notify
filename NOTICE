@@ -1,0 +1,22 @@
+Pi Terminal Notify for VS Code
+Copyright 2025 Patrick Kerschbaum
+
+This project includes code derived from the following works:
+
+---
+
+vscode-terminal-osc-notifier
+https://github.com/wbopan/vscode-terminal-osc-notifier
+Copyright © 2024 Pan Wenbo
+Licensed under the MIT License.
+
+Used in: packages/vscode-extension, packages/vscode-extension-core
+
+---
+
+notify.ts (from agent-stuff)
+https://github.com/mitsuhiko/agent-stuff/blob/main/pi-extensions/notify.ts
+Copyright © Armin Ronacher
+Licensed under the Apache License, Version 2.0.
+
+Used in: packages/pi-extension

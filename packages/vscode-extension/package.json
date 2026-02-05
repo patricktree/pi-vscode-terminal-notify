@@ -1,9 +1,9 @@
 {
   "name": "pi-vscode-terminal-notify",
-  "displayName": "Extension for Pi Coding Agent Notifications",
+  "displayName": "Pi Coding Agent Notifications",
   "version": "0.1.2",
   "private": true,
-  "description": "A VSCode extension to show terminal notifications from Pi Coding Agent when it needs user input.",
+  "description": "Show terminal notifications from Pi Coding Agent (http://pi.dev/) when it needs user input.",
   "categories": [
     "Other"
   ],
@@ -21,7 +21,7 @@
     "type": "git",
     "url": "https://github.com/patricktree/pi-vscode-terminal-notify.git"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "author": {
     "name": "Patrick Kerschbaum"
   },
