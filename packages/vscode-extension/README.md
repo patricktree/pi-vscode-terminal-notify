@@ -14,7 +14,7 @@ VS Code extension that shows macOS notifications when the [Pi Coding Agent](http
 ## Requirements
 
 - **macOS** — this extension uses native macOS notifications and is not available on other platforms.
-- **[`@patricktree/pi-vscode-terminal-notify.pi-extension`](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)** — companion Pi package that emits [OSC 777](https://iterm2.com/documentation-escape-codes.html) escape sequences when Pi finishes a turn. Without it, this VS Code extension has nothing to listen for.
+- **[`pi-vscode-terminal-notification`](https://www.npmjs.com/package/pi-vscode-terminal-notification)** — companion Pi package that emits notifications when Pi finishes a turn. Without it, this VS Code extension has nothing to listen for.
 
 ## Installation
 
@@ -22,7 +22,7 @@ VS Code extension that shows macOS notifications when the [Pi Coding Agent](http
 2. Install the companion Pi package:
 
    ```bash
-   pi install @patricktree/pi-vscode-terminal-notify.pi-extension
+   pi install pi-vscode-terminal-notification
    ```
 
 3. On first use, macOS shows a permission dialog — click **Allow**:
@@ -39,7 +39,7 @@ VS Code extension that shows macOS notifications when the [Pi Coding Agent](http
 ### Notifications not appearing
 
 - **Notification permissions** — open **System Settings → Notifications**, find **pi-terminal-notifier**, and enable **Allow Notifications**.
-- **Pi extension not installed** — this VS Code extension only listens; install the Pi package via `pi install @patricktree/pi-vscode-terminal-notify.pi-extension`.
+- **Pi extension not installed** — this VS Code extension only listens; install the Pi package via `pi install pi-vscode-terminal-notification`.
 - **Terminal is focused** — notifications are intentionally suppressed when the Pi terminal is already visible and focused.
 
 ### Checking logs
@@ -53,7 +53,7 @@ Derived from Pan Wenbo's [`vscode-terminal-osc-notifier`](https://github.com/wbo
 ## Links
 
 - [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify)
-- [Companion Pi package on npm](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)
+- [Companion Pi package on npm](https://www.npmjs.com/package/pi-vscode-terminal-notification)
 - [Source code](https://github.com/patricktree/pi-vscode-terminal-notify)
 - [Issue tracker](https://github.com/patricktree/pi-vscode-terminal-notify/issues)
 - [Pi Coding Agent](https://pi.dev)

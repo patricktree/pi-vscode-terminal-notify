@@ -1,6 +1,6 @@
 # Pi Extension — VS Code Terminal Notify
 
-[Pi](https://pi.dev) extension that emits `OSC 777` terminal notifications when the coding agent finishes a turn. Paired with the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify), this enables native macOS notifications when Pi is waiting for input.
+[Pi](https://pi.dev) extension that emits terminal notifications when the coding agent finishes a turn. Paired with the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify), this enables native macOS notifications when Pi is waiting for input.
 
 ![Example macOS notification from Pi](assets/notification-example.png)
 
@@ -23,7 +23,7 @@ The VS Code extension picks up these sequences from the terminal output stream a
 ### 1. Install Pi package from npm
 
 ```bash
-pi install @patricktree/pi-vscode-terminal-notify.pi-extension
+pi install pi-vscode-terminal-notification
 ```
 
 ### 2. Install the VS Code extension
@@ -40,7 +40,7 @@ Derived from Armin Ronacher's [`notify.ts`](https://github.com/mitsuhiko/agent-s
 
 ## Links
 
-- [npm package](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)
+- [npm package](https://www.npmjs.com/package/pi-vscode-terminal-notification)
 - [VS Code extension (Marketplace)](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify)
 - [Source code](https://github.com/patricktree/pi-vscode-terminal-notify)
 - [Issue tracker](https://github.com/patricktree/pi-vscode-terminal-notify/issues)

@@ -27,16 +27,16 @@ If you missed the prompt, enable it manually: **System Settings → Notification
 Install from npm:
 
 ```bash
-pi install @patricktree/pi-vscode-terminal-notify.pi-extension
+pi install pi-vscode-terminal-notification
 ```
 
 Project-local install:
 
 ```bash
-pi install @patricktree/pi-vscode-terminal-notify.pi-extension -l
+pi install pi-vscode-terminal-notification -l
 ```
 
-npm package: [@patricktree/pi-vscode-terminal-notify.pi-extension](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension).
+npm package: [pi-vscode-terminal-notification](https://www.npmjs.com/package/pi-vscode-terminal-notification).
 
 ## How it works
 

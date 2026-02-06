@@ -1,6 +1,7 @@
 {
-  "name": "@patricktree/pi-vscode-terminal-notify.pi-extension",
+  "name": "pi-vscode-terminal-notification",
   "version": "0.1.1",
+  "description": "Pi extension for VS Code terminal notifications when Pi finishes a turn.",
   "keywords": [
     "pi-package"
   ],

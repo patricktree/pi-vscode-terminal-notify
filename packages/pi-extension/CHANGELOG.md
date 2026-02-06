@@ -1,4 +1,4 @@
-# @patricktree/pi-vscode-terminal-notify.pi-extension
+# pi-vscode-terminal-notification
 
 ## 0.1.1
 

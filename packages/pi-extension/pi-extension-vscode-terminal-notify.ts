@@ -81,12 +81,25 @@ const sendOscNotification = (title: string, body: string): void => {
   process.stdout.write(`\u001B]777;notify;${safeTitle};${safeBody}\u0007`);
 };
 
+const isVsCodeTerminal = (): boolean => {
+  // eslint-disable-next-line n/no-process-env -- TERM_PROGRAM is the canonical VS Code terminal signal.
+  return process.env["TERM_PROGRAM"] === "vscode";
+};
+
 export default function registerOscNotify(pi: ExtensionAPI) {
+  if (!isVsCodeTerminal()) {
+    log("Skipping notification registration outside VS Code terminal", {
+      // eslint-disable-next-line n/no-process-env -- diagnostic logging only.
+      termProgram: process.env["TERM_PROGRAM"] ?? null,
+    });
+    return;
+  }
+
   pi.on("agent_end", (event) => {
     const lastText = extractLastAssistantText(event.messages);
     const { title, body } = formatNotification(lastText);
     sendOscNotification(title, body);
-    log("Sent OSC 777 notification", { title, bodyLength: body.length });
+    log("Sent notification", { title, bodyLength: body.length });
   });
 }
 
