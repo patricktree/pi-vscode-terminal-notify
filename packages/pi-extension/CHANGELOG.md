@@ -1,5 +1,13 @@
 # pi-vscode-terminal-notification
 
+## 0.1.3
+
+### Patch Changes
+
+- 49c4a6e: Fix image references to use HTTPS GitHub raw content URLs:
+  - `pi.image` in `packages/pi-extension/package.json`
+  - Image links in `README.md`, `packages/pi-extension/README.md`, and `packages/vscode-extension/README.md`
+
 ## 0.1.2
 
 ### Patch Changes
