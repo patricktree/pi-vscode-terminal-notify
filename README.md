@@ -2,7 +2,7 @@
 
 macOS notifications for the [Pi Coding Agent](https://pi.dev) — get notified when Pi is waiting for input and the terminal is not focused.
 
-![Example macOS notification from Pi](packages/vscode-extension/assets/notification-example.png)
+![Example macOS notification from Pi](https://raw.githubusercontent.com/patricktree/pi-vscode-terminal-notify/main/packages/vscode-extension/assets/notification-example.png)
 
 ## Features
 

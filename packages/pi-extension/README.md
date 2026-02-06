@@ -2,7 +2,7 @@
 
 [Pi](https://pi.dev) extension that emits terminal notifications when the coding agent finishes a turn. Paired with the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify), this enables native macOS notifications when Pi is waiting for input.
 
-![Example macOS notification from Pi](assets/notification-example.png)
+![Example macOS notification from Pi](https://raw.githubusercontent.com/patricktree/pi-vscode-terminal-notify/main/packages/pi-extension/assets/notification-example.png)
 
 ## What it does
 

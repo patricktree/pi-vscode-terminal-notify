@@ -64,6 +64,6 @@
     "extensions": [
       "./pi-extension-vscode-terminal-notify.ts"
     ],
-    "image": "assets/notification-example.png"
+    "image": "https://raw.githubusercontent.com/patricktree/pi-vscode-terminal-notify/main/packages/pi-extension/assets/notification-example.png"
   }
 }

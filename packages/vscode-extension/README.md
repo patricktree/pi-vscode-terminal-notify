@@ -2,7 +2,7 @@
 
 VS Code extension that shows macOS notifications when the [Pi Coding Agent](https://pi.dev) is waiting for input and the terminal is not focused.
 
-![Example macOS notification from Pi](assets/notification-example.png)
+![Example macOS notification from Pi](https://raw.githubusercontent.com/patricktree/pi-vscode-terminal-notify/main/packages/vscode-extension/assets/notification-example.png)
 
 ## Features
 
@@ -26,7 +26,7 @@ VS Code extension that shows macOS notifications when the [Pi Coding Agent](http
    ```
 
 3. On first use, macOS shows a permission dialog — click **Allow**:
-   ![macOS notification permission dialog for pi-terminal-notifier](assets/pi-terminal-notifier-allow-dialog.png)
+   ![macOS notification permission dialog for pi-terminal-notifier](https://raw.githubusercontent.com/patricktree/pi-vscode-terminal-notify/main/packages/vscode-extension/assets/pi-terminal-notifier-allow-dialog.png)
 
 ## How it works
 
