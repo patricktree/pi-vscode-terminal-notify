@@ -71,7 +71,7 @@ const formatNotification = (text: string | null): { title: string; body: string 
     normalized.length > MAX_BODY_LENGTH
       ? `${normalized.slice(0, MAX_BODY_LENGTH - 1)}…`
       : normalized;
-  return { title: "π", body };
+  return { title: "Pi is waiting for input", body };
 };
 
 const sendOscNotification = (title: string, body: string): void => {

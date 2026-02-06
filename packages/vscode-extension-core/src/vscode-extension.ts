@@ -10,7 +10,6 @@ import { OscParser, type ParsedNotification } from "./osc-parser.js";
 import path from "node:path";
 import { execFile } from "node:child_process";
 
-const NOTIFICATION_TITLE = "Pi is waiting for input";
 const VSCODE_APP_NAME = "Visual Studio Code";
 
 let outputChannel: vscode.OutputChannel | undefined;
@@ -184,9 +183,7 @@ function showNotification(
 }
 
 function buildNotificationTitle(oscTitle?: string) {
-  const trimmed = oscTitle?.trim();
-  const parts = [NOTIFICATION_TITLE, trimmed].filter(Boolean) as string[];
-  return parts.join(" — ");
+  return oscTitle?.trim() || "Pi is waiting for input";
 }
 
 function buildNotificationMessage(oscBody: string, terminal: vscode.Terminal) {
