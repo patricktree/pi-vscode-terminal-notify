@@ -1,5 +1,11 @@
 # @patricktree/pi-vscode-terminal-notify.vscode-extension-core
 
+## 0.1.4
+
+### Patch Changes
+
+- 3285f57: Improve notification titles to use “Pi is waiting for input” by default and prefer OSC-provided titles when available.
+
 ## 0.1.3
 
 ### Patch Changes

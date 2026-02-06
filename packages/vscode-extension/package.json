@@ -1,7 +1,7 @@
 {
   "name": "pi-vscode-terminal-notify",
   "displayName": "Pi Coding Agent Notifications",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "Show terminal notifications from Pi Coding Agent (http://pi.dev/) when it needs user input.",
   "categories": [
