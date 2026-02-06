@@ -1,6 +1,8 @@
 # Pi Extension — VS Code Terminal Notify
 
-[Pi](https://pi.dev) extension that emits [OSC 777](https://iterm2.com/documentation-escape-codes.html) terminal notifications when the coding agent finishes a turn. Paired with the [VS Code extension](../vscode-extension/), this enables native macOS notifications when Pi is waiting for input.
+[Pi](https://pi.dev) extension that emits `OSC 777` terminal notifications when the coding agent finishes a turn. Paired with the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify), this enables native macOS notifications when Pi is waiting for input.
+
+![Example macOS notification from Pi](assets/notification-example.png)
 
 ## What it does
 
@@ -18,32 +20,15 @@ The VS Code extension picks up these sequences from the terminal output stream a
 
 ## Installation
 
-### 1. Build the workspace
-
-This extension depends on the [`shared`](../shared/) package, so the full workspace must be built first:
+### 1. Install Pi package from npm
 
 ```bash
-pnpm install
-pnpm -r run build
+pi install @patricktree/pi-vscode-terminal-notify.pi-extension
 ```
 
-### 2. Register in Pi settings
+### 2. Install the VS Code extension
 
-Add the package to your Pi settings — either globally (`~/.pi/agent/settings.json`) or per-project (`.pi/settings.json`):
-
-```json
-{
-  "packages": [
-    "/absolute/path/to/pi-vscode-terminal-notify/packages/pi-extension"
-  ]
-}
-```
-
-Restart Pi.
-
-### 3. Install the VS Code extension
-
-Install the companion [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify) to receive and display the notifications.
+Install the companion [VS Code extension](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify) to receive and display notifications.
 
 ## Logging
 
@@ -55,6 +40,8 @@ Derived from Armin Ronacher's [`notify.ts`](https://github.com/mitsuhiko/agent-s
 
 ## Links
 
-- [VS Code extension](../vscode-extension/) — the other half of the pipeline
+- [npm package](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)
+- [VS Code extension (Marketplace)](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify)
 - [Source code](https://github.com/patricktree/pi-vscode-terminal-notify)
 - [Issue tracker](https://github.com/patricktree/pi-vscode-terminal-notify/issues)
+- [Pi Coding Agent](https://pi.dev)

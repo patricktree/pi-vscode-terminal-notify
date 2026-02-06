@@ -1,6 +1,6 @@
 # Pi Coding Agent Notifications
 
-VS Code extension that shows macOS notifications when the [Pi coding agent](https://pi.dev) is waiting for input and the terminal is not focused.
+VS Code extension that shows macOS notifications when the [Pi Coding Agent](https://pi.dev) is waiting for input and the terminal is not focused.
 
 ![Example macOS notification from Pi](assets/notification-example.png)
 
@@ -14,12 +14,17 @@ VS Code extension that shows macOS notifications when the [Pi coding agent](http
 ## Requirements
 
 - **macOS** — this extension uses native macOS notifications and is not available on other platforms.
-- **[Pi extension](https://github.com/patricktree/pi-vscode-terminal-notify/tree/main/packages/pi-extension)** — a companion Pi package that emits [OSC 777](https://iterm2.com/documentation-escape-codes.html) escape sequences when Pi finishes a turn. Without it, the VS Code extension has nothing to listen for.
+- **[`@patricktree/pi-vscode-terminal-notify.pi-extension`](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)** — companion Pi package that emits [OSC 777](https://iterm2.com/documentation-escape-codes.html) escape sequences when Pi finishes a turn. Without it, this VS Code extension has nothing to listen for.
 
 ## Installation
 
 1. Install this extension from the [Marketplace](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify).
-2. Install the [Pi extension](https://github.com/patricktree/pi-vscode-terminal-notify/tree/main/packages/pi-extension) so the Pi coding agent emits notifications on `agent_end`.
+2. Install the companion Pi package:
+
+   ```bash
+   pi install @patricktree/pi-vscode-terminal-notify.pi-extension
+   ```
+
 3. On first use, macOS shows a permission dialog — click **Allow**:
    ![macOS notification permission dialog for pi-terminal-notifier](assets/pi-terminal-notifier-allow-dialog.png)
 
@@ -34,7 +39,7 @@ VS Code extension that shows macOS notifications when the [Pi coding agent](http
 ### Notifications not appearing
 
 - **Notification permissions** — open **System Settings → Notifications**, find **pi-terminal-notifier**, and enable **Allow Notifications**.
-- **Pi extension not installed** — the VS Code extension only listens; the Pi extension must be installed to emit the OSC 777 sequences. See [Pi extension setup](https://github.com/patricktree/pi-vscode-terminal-notify/tree/main/packages/pi-extension).
+- **Pi extension not installed** — this VS Code extension only listens; install the Pi package via `pi install @patricktree/pi-vscode-terminal-notify.pi-extension`.
 - **Terminal is focused** — notifications are intentionally suppressed when the Pi terminal is already visible and focused.
 
 ### Checking logs
@@ -47,6 +52,8 @@ Derived from Pan Wenbo's [`vscode-terminal-osc-notifier`](https://github.com/wbo
 
 ## Links
 
+- [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=patricktree.pi-vscode-terminal-notify)
+- [Companion Pi package on npm](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension)
 - [Source code](https://github.com/patricktree/pi-vscode-terminal-notify)
 - [Issue tracker](https://github.com/patricktree/pi-vscode-terminal-notify/issues)
-- [Pi coding agent](https://pi.dev)
+- [Pi Coding Agent](https://pi.dev)

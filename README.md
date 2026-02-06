@@ -1,6 +1,6 @@
 # Pi Terminal Notify for VS Code
 
-macOS notifications for the [Pi coding agent](https://pi.dev) — get notified when Pi is waiting for input and the terminal is not focused.
+macOS notifications for the [Pi Coding Agent](https://pi.dev) — get notified when Pi is waiting for input and the terminal is not focused.
 
 ![Example macOS notification from Pi](packages/vscode-extension/assets/notification-example.png)
 
@@ -24,31 +24,26 @@ If you missed the prompt, enable it manually: **System Settings → Notification
 
 ### 2. Pi extension
 
-Build the workspace, then register the package in your Pi settings:
+Install from npm:
 
 ```bash
-pnpm install
-pnpm -r run build
+pi install @patricktree/pi-vscode-terminal-notify.pi-extension
 ```
 
-Add the extension to your Pi settings (`~/.pi/agent/settings.json` or project-level `.pi/settings.json`):
+Project-local install:
 
-```json
-{
-  "packages": [
-    "/absolute/path/to/pi-vscode-terminal-notify/packages/pi-extension"
-  ]
-}
+```bash
+pi install @patricktree/pi-vscode-terminal-notify.pi-extension -l
 ```
 
-Restart Pi.
+npm package: [@patricktree/pi-vscode-terminal-notify.pi-extension](https://www.npmjs.com/package/@patricktree/pi-vscode-terminal-notify.pi-extension).
 
 ## How it works
 
 The notification pipeline has three stages:
 
 1. **Pi extension emits an OSC 777 escape sequence.**
-   When the Pi coding agent finishes a turn (`agent_end`), the [Pi extension](packages/pi-extension/) extracts the last assistant message, truncates it, and writes an [OSC 777](https://iterm2.com/documentation-escape-codes.html) `notify` sequence (`ESC ] 777 ; notify ; <title> ; <body> BEL`) to the terminal's stdout.
+   When the Pi Coding Agent finishes a turn (`agent_end`), the [Pi extension](packages/pi-extension/) extracts the last assistant message, truncates it, and writes an [OSC 777](https://iterm2.com/documentation-escape-codes.html) `notify` sequence (`ESC ] 777 ; notify ; <title> ; <body> BEL`) to the terminal's stdout.
 
 2. **VS Code extension parses the terminal stream.**
    The extension listens for every shell execution via `onDidStartTerminalShellExecution`, reads the output stream, and feeds each chunk into an OSC parser that detects `777;notify` sequences (including tmux passthrough-wrapped ones). When a notification is parsed, the extension checks whether the originating terminal is currently visible and focused — if it is, the notification is suppressed.
